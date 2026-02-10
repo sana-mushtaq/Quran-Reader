@@ -13,15 +13,23 @@ function NativeTabLayout() {
     <NativeTabs>
       <NativeTabs.Trigger name="index">
         <Icon sf={{ default: "house", selected: "house.fill" }} />
-        <Label>Today</Label>
+        <Label>Home</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="surahs">
         <Icon sf={{ default: "book", selected: "book.fill" }} />
-        <Label>Surahs</Label>
+        <Label>Quran</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="bookmarks">
-        <Icon sf={{ default: "bookmark", selected: "bookmark.fill" }} />
-        <Label>Saved</Label>
+      <NativeTabs.Trigger name="tasbih">
+        <Icon sf={{ default: "circle.dotted", selected: "circle.dotted" }} />
+        <Label>Tasbih</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="dua">
+        <Icon sf={{ default: "hands.sparkles", selected: "hands.sparkles.fill" }} />
+        <Label>Dua</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="more">
+        <Icon sf={{ default: "ellipsis.circle", selected: "ellipsis.circle.fill" }} />
+        <Label>More</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -68,28 +76,52 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Today",
+          title: "Home",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="sunny-outline" size={size} color={color} />
+            <Ionicons name="home-outline" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="surahs"
         options={{
-          title: "Surahs",
+          title: "Quran",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="book-outline" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
+        name="tasbih"
+        options={{
+          title: "Tasbih",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="radio-button-on-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="dua"
+        options={{
+          title: "Dua",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="hand-left-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="more"
+        options={{
+          title: "More",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="ellipsis-horizontal-circle-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="bookmarks"
         options={{
-          title: "Saved",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="bookmark-outline" size={size} color={color} />
-          ),
+          href: null,
         }}
       />
     </Tabs>
