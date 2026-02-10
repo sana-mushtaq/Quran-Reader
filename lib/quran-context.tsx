@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Audio } from "expo-av";
 
@@ -12,16 +12,29 @@ interface BookmarkedAyah {
   numberInSurah: number;
 }
 
+export interface AudioTrack {
+  id: string;
+  uri: string;
+  ayahNumberInSurah: number;
+}
+
 interface QuranContextValue {
   bookmarks: BookmarkedAyah[];
   isBookmarked: (ayahNumber: number) => boolean;
   toggleBookmark: (ayah: BookmarkedAyah) => void;
-  currentAudio: string | null;
+  currentTrackId: string | null;
   isPlaying: boolean;
   isLoading: boolean;
-  playAudio: (url: string) => Promise<void>;
+  playQueue: (tracks: AudioTrack[], startIndex: number) => Promise<void>;
+  playSingle: (uri: string) => Promise<void>;
   pauseAudio: () => Promise<void>;
+  resumeAudio: () => Promise<void>;
   stopAudio: () => Promise<void>;
+  skipNext: () => Promise<void>;
+  skipPrev: () => Promise<void>;
+  currentAyahInSurah: number | null;
+  totalTracksInQueue: number;
+  queueIndex: number;
 }
 
 const QuranContext = createContext<QuranContextValue | null>(null);
@@ -31,9 +44,15 @@ const BOOKMARKS_KEY = "@quran_bookmarks";
 export function QuranProvider({ children }: { children: ReactNode }) {
   const [bookmarks, setBookmarks] = useState<BookmarkedAyah[]>([]);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
-  const [currentAudio, setCurrentAudio] = useState<string | null>(null);
+  const [currentTrackId, setCurrentTrackId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [currentAyahInSurah, setCurrentAyahInSurah] = useState<number | null>(null);
+
+  const queueRef = useRef<AudioTrack[]>([]);
+  const queueIndexRef = useRef(0);
+  const [queueIndex, setQueueIndex] = useState(0);
+  const [totalTracksInQueue, setTotalTracksInQueue] = useState(0);
 
   useEffect(() => {
     loadBookmarks();
@@ -80,36 +99,65 @@ export function QuranProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const playAudio = useCallback(
-    async (url: string) => {
-      try {
-        if (sound) {
-          await sound.unloadAsync();
-        }
-        setIsLoading(true);
-        const { sound: newSound } = await Audio.Sound.createAsync(
-          { uri: url },
-          { shouldPlay: true }
-        );
-        setSound(newSound);
-        setCurrentAudio(url);
-        setIsPlaying(true);
-        setIsLoading(false);
+  const playTrackAtIndex = useCallback(async (index: number) => {
+    const queue = queueRef.current;
+    if (index < 0 || index >= queue.length) {
+      setIsPlaying(false);
+      setCurrentTrackId(null);
+      setCurrentAyahInSurah(null);
+      queueRef.current = [];
+      setTotalTracksInQueue(0);
+      setQueueIndex(0);
+      return;
+    }
 
-        newSound.setOnPlaybackStatusUpdate((status) => {
-          if (status.isLoaded) {
-            if (status.didJustFinish) {
-              setIsPlaying(false);
-              setCurrentAudio(null);
-            }
-          }
-        });
-      } catch {
-        setIsLoading(false);
+    const track = queue[index];
+    queueIndexRef.current = index;
+    setQueueIndex(index);
+    setCurrentTrackId(track.id);
+    setCurrentAyahInSurah(track.ayahNumberInSurah);
+    setIsLoading(true);
+
+    try {
+      if (sound) {
+        await sound.unloadAsync();
       }
-    },
-    [sound]
-  );
+
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        { uri: track.uri },
+        { shouldPlay: true }
+      );
+      setSound(newSound);
+      setIsPlaying(true);
+      setIsLoading(false);
+
+      newSound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          playTrackAtIndex(queueIndexRef.current + 1);
+        }
+      });
+    } catch {
+      setIsLoading(false);
+      playTrackAtIndex(queueIndexRef.current + 1);
+    }
+  }, [sound]);
+
+  const playQueue = useCallback(async (tracks: AudioTrack[], startIndex: number) => {
+    if (sound) {
+      await sound.unloadAsync();
+      setSound(null);
+    }
+    queueRef.current = tracks;
+    setTotalTracksInQueue(tracks.length);
+    await playTrackAtIndex(startIndex);
+  }, [sound, playTrackAtIndex]);
+
+  const playSingle = useCallback(async (uri: string) => {
+    const singleTrack: AudioTrack = { id: uri, uri, ayahNumberInSurah: 0 };
+    queueRef.current = [singleTrack];
+    setTotalTracksInQueue(1);
+    await playTrackAtIndex(0);
+  }, [playTrackAtIndex]);
 
   const pauseAudio = useCallback(async () => {
     if (sound) {
@@ -118,29 +166,63 @@ export function QuranProvider({ children }: { children: ReactNode }) {
     }
   }, [sound]);
 
+  const resumeAudio = useCallback(async () => {
+    if (sound) {
+      await sound.playAsync();
+      setIsPlaying(true);
+    }
+  }, [sound]);
+
   const stopAudio = useCallback(async () => {
     if (sound) {
       await sound.stopAsync();
       await sound.unloadAsync();
       setSound(null);
-      setCurrentAudio(null);
-      setIsPlaying(false);
     }
+    setCurrentTrackId(null);
+    setIsPlaying(false);
+    setCurrentAyahInSurah(null);
+    queueRef.current = [];
+    setTotalTracksInQueue(0);
+    setQueueIndex(0);
   }, [sound]);
+
+  const skipNext = useCallback(async () => {
+    if (sound) {
+      await sound.unloadAsync();
+      setSound(null);
+    }
+    await playTrackAtIndex(queueIndexRef.current + 1);
+  }, [sound, playTrackAtIndex]);
+
+  const skipPrev = useCallback(async () => {
+    if (sound) {
+      await sound.unloadAsync();
+      setSound(null);
+    }
+    await playTrackAtIndex(Math.max(0, queueIndexRef.current - 1));
+  }, [sound, playTrackAtIndex]);
 
   const value = useMemo(
     () => ({
       bookmarks,
       isBookmarked,
       toggleBookmark,
-      currentAudio,
+      currentTrackId,
       isPlaying,
       isLoading,
-      playAudio,
+      playQueue,
+      playSingle,
       pauseAudio,
+      resumeAudio,
       stopAudio,
+      skipNext,
+      skipPrev,
+      currentAyahInSurah,
+      totalTracksInQueue,
+      queueIndex,
     }),
-    [bookmarks, isBookmarked, toggleBookmark, currentAudio, isPlaying, isLoading, playAudio, pauseAudio, stopAudio]
+    [bookmarks, isBookmarked, toggleBookmark, currentTrackId, isPlaying, isLoading, playQueue, playSingle, pauseAudio, resumeAudio, stopAudio, skipNext, skipPrev, currentAyahInSurah, totalTracksInQueue, queueIndex]
   );
 
   return <QuranContext.Provider value={value}>{children}</QuranContext.Provider>;

@@ -22,7 +22,7 @@ export default function HomeScreen() {
   const isDark = colorScheme === "dark";
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
-  const { isBookmarked, toggleBookmark, playAudio, pauseAudio, isPlaying, currentAudio, isLoading } = useQuran();
+  const { isBookmarked, toggleBookmark, playSingle, pauseAudio, resumeAudio, isPlaying, currentTrackId, isLoading } = useQuran();
 
   const [dailyArabic, setDailyArabic] = useState<AyahEdition | null>(null);
   const [dailyTranslation, setDailyTranslation] = useState<AyahEdition | null>(null);
@@ -55,13 +55,18 @@ export default function HomeScreen() {
     day: "numeric",
   });
 
+  const dailyTrackId = dailyArabic?.audio || null;
+  const isDailyPlaying = isPlaying && currentTrackId === dailyTrackId;
+
   const handlePlayAudio = async () => {
     if (!dailyArabic?.audio) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (isPlaying && currentAudio === dailyArabic.audio) {
+    if (isDailyPlaying) {
       await pauseAudio();
+    } else if (!isPlaying && currentTrackId === dailyTrackId) {
+      await resumeAudio();
     } else {
-      await playAudio(dailyArabic.audio);
+      await playSingle(dailyArabic.audio);
     }
   };
 
@@ -131,11 +136,11 @@ export default function HomeScreen() {
               <View style={styles.cardActions}>
                 {dailyArabic.audio ? (
                   <Pressable onPress={handlePlayAudio} hitSlop={8}>
-                    {isLoading && currentAudio === dailyArabic.audio ? (
+                    {isLoading && currentTrackId === dailyTrackId ? (
                       <ActivityIndicator size="small" color="#fff" />
                     ) : (
                       <Ionicons
-                        name={isPlaying && currentAudio === dailyArabic.audio ? "pause" : "play"}
+                        name={isDailyPlaying ? "pause" : "play"}
                         size={22}
                         color="#fff"
                       />

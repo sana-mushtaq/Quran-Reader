@@ -22,7 +22,7 @@ export default function BookmarksScreen() {
   const isDark = colorScheme === "dark";
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
-  const { bookmarks, toggleBookmark, playAudio, pauseAudio, isPlaying, currentAudio, isLoading } = useQuran();
+  const { bookmarks, toggleBookmark } = useQuran();
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
