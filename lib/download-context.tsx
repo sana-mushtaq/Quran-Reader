@@ -128,7 +128,7 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
         const alreadyCached = surahStatus[surahNum] === "downloaded";
         if (alreadyCached) {
           const textCached = await isSurahTextCached(surahNum);
-          const audioCached = await isSurahAudioDownloaded(surahNum, surah.numberOfAyahs);
+          const audioCached = isSurahAudioDownloaded(surahNum, surah.numberOfAyahs);
           if (textCached && audioCached) {
             completedSurahs++;
             setDownloadProgress({
@@ -198,12 +198,12 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const removeSurahDownload = useCallback(async (surahNumber: number, totalAyahs: number) => {
-    await deleteSurahAudio(surahNumber, totalAyahs);
+    deleteSurahAudio(surahNumber, totalAyahs);
     updateSurahStatus(surahNumber, "none");
   }, [updateSurahStatus]);
 
   const removeAllDownloads = useCallback(async () => {
-    await deleteAllAudio();
+    deleteAllAudio();
     await setAllDataCached(false);
     setSurahStatus({});
     await AsyncStorage.removeItem(DOWNLOAD_STATUS_KEY);

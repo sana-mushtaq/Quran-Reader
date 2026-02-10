@@ -9,6 +9,7 @@ import { Amiri_400Regular, Amiri_700Bold } from "@expo-google-fonts/amiri";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
 import { QuranProvider } from "@/lib/quran-context";
+import { DownloadProvider } from "@/lib/download-context";
 import SplashScreen from "@/components/SplashScreen";
 
 ExpoSplashScreen.preventAutoHideAsync();
@@ -44,14 +45,16 @@ export default function RootLayout() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <QuranProvider>
-          <GestureHandlerRootView style={{ flex: 1 }}>
-            <KeyboardProvider>
-              <RootLayoutNav />
-              {showSplash ? (
-                <SplashScreen onFinish={() => setShowSplash(false)} />
-              ) : null}
-            </KeyboardProvider>
-          </GestureHandlerRootView>
+          <DownloadProvider>
+            <GestureHandlerRootView style={{ flex: 1 }}>
+              <KeyboardProvider>
+                <RootLayoutNav />
+                {showSplash ? (
+                  <SplashScreen onFinish={() => setShowSplash(false)} />
+                ) : null}
+              </KeyboardProvider>
+            </GestureHandlerRootView>
+          </DownloadProvider>
         </QuranProvider>
       </QueryClientProvider>
     </ErrorBoundary>

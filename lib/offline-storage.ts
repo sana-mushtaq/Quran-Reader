@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as FileSystem from "expo-file-system";
+import { Paths, File as FSFile, Directory as FSDirectory } from "expo-file-system";
+import ExpoFileSystem from "expo-file-system/src/ExpoFileSystem";
 import { Platform } from "react-native";
 import { Surah, AyahEdition } from "./quran-api";
 
@@ -7,13 +8,17 @@ const SURAHS_LIST_KEY = "@quran_surahs_list";
 const SURAH_ARABIC_PREFIX = "@quran_surah_arabic_";
 const SURAH_TRANSLATION_PREFIX = "@quran_surah_translation_";
 const ALL_DATA_CACHED_KEY = "@quran_all_data_cached";
-const AUDIO_DIR = (FileSystem.documentDirectory || "") + "quran_audio/";
 
-export async function ensureAudioDir() {
+function getAudioDir(): FSDirectory | null {
+  if (Platform.OS === "web") return null;
+  return new FSDirectory(Paths.document, "quran_audio");
+}
+
+export function ensureAudioDir() {
   if (Platform.OS === "web") return;
-  const dirInfo = await FileSystem.getInfoAsync(AUDIO_DIR);
-  if (!dirInfo.exists) {
-    await FileSystem.makeDirectoryAsync(AUDIO_DIR, { intermediates: true });
+  const dir = getAudioDir();
+  if (dir && !dir.exists) {
+    dir.create({ intermediates: true, idempotent: true });
   }
 }
 
@@ -50,22 +55,28 @@ export async function getCachedSurahTranslation(surahNumber: number): Promise<Ay
   return data ? JSON.parse(data) : null;
 }
 
-export function getAudioFilePath(surahNumber: number, ayahNumber: number): string {
-  return `${AUDIO_DIR}${surahNumber}_${ayahNumber}.mp3`;
+function getAudioFile(surahNumber: number, ayahNumber: number): FSFile | null {
+  if (Platform.OS === "web") return null;
+  const dir = getAudioDir();
+  if (!dir) return null;
+  return new FSFile(dir, `${surahNumber}_${ayahNumber}.mp3`);
 }
 
-export async function isAudioDownloaded(surahNumber: number, ayahNumber: number): Promise<boolean> {
+export function getAudioFilePath(surahNumber: number, ayahNumber: number): string | null {
+  const file = getAudioFile(surahNumber, ayahNumber);
+  return file ? file.uri : null;
+}
+
+export function isAudioDownloaded(surahNumber: number, ayahNumber: number): boolean {
   if (Platform.OS === "web") return false;
-  const path = getAudioFilePath(surahNumber, ayahNumber);
-  const info = await FileSystem.getInfoAsync(path);
-  return info.exists;
+  const file = getAudioFile(surahNumber, ayahNumber);
+  return file ? file.exists : false;
 }
 
-export async function isSurahAudioDownloaded(surahNumber: number, totalAyahs: number): Promise<boolean> {
+export function isSurahAudioDownloaded(surahNumber: number, totalAyahs: number): boolean {
   if (Platform.OS === "web") return false;
   for (let i = 1; i <= totalAyahs; i++) {
-    const exists = await isAudioDownloaded(surahNumber, i);
-    if (!exists) return false;
+    if (!isAudioDownloaded(surahNumber, i)) return false;
   }
   return true;
 }
@@ -82,32 +93,35 @@ export async function downloadAyahAudio(
   audioUrl: string
 ): Promise<void> {
   if (Platform.OS === "web") return;
-  await ensureAudioDir();
-  const filePath = getAudioFilePath(surahNumber, ayahNumberInSurah);
-  const info = await FileSystem.getInfoAsync(filePath);
-  if (info.exists) return;
+  ensureAudioDir();
 
-  await FileSystem.downloadAsync(audioUrl, filePath);
+  const file = getAudioFile(surahNumber, ayahNumberInSurah);
+  if (!file) return;
+  if (file.exists) return;
+
+  const dir = getAudioDir();
+  if (!dir) return;
+
+  await ExpoFileSystem.downloadFileAsync(audioUrl, file);
 }
 
-export async function deleteSurahAudio(surahNumber: number, totalAyahs: number): Promise<void> {
+export function deleteSurahAudio(surahNumber: number, totalAyahs: number): void {
   if (Platform.OS === "web") return;
   for (let i = 1; i <= totalAyahs; i++) {
-    const filePath = getAudioFilePath(surahNumber, i);
-    const info = await FileSystem.getInfoAsync(filePath);
-    if (info.exists) {
-      await FileSystem.deleteAsync(filePath);
+    const file = getAudioFile(surahNumber, i);
+    if (file && file.exists) {
+      file.delete();
     }
   }
 }
 
-export async function deleteAllAudio(): Promise<void> {
+export function deleteAllAudio(): void {
   if (Platform.OS === "web") return;
-  const info = await FileSystem.getInfoAsync(AUDIO_DIR);
-  if (info.exists) {
-    await FileSystem.deleteAsync(AUDIO_DIR, { idempotent: true });
-    await ensureAudioDir();
+  const dir = getAudioDir();
+  if (dir && dir.exists) {
+    dir.delete();
   }
+  ensureAudioDir();
 }
 
 export async function setAllDataCached(value: boolean) {
@@ -117,16 +131,4 @@ export async function setAllDataCached(value: boolean) {
 export async function isAllDataCached(): Promise<boolean> {
   const val = await AsyncStorage.getItem(ALL_DATA_CACHED_KEY);
   return val ? JSON.parse(val) : false;
-}
-
-export async function getOfflineStorageSize(): Promise<string> {
-  if (Platform.OS === "web") return "0 MB";
-  try {
-    const info = await FileSystem.getInfoAsync(AUDIO_DIR);
-    if (info.exists && "size" in info) {
-      const mb = ((info as any).size || 0) / (1024 * 1024);
-      return `${mb.toFixed(1)} MB`;
-    }
-  } catch {}
-  return "Unknown";
 }

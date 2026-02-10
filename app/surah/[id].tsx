@@ -14,8 +14,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { fetchSurahArabic, fetchSurahTranslation, AyahEdition, getArabicNumber } from "@/lib/quran-api";
+import { fetchSurahArabic, fetchSurahTranslation, AyahEdition, getArabicNumber, getLocalAudioUri } from "@/lib/quran-api";
 import { useQuran } from "@/lib/quran-context";
+import { useDownload } from "@/lib/download-context";
 
 interface CombinedAyah {
   number: number;
@@ -23,6 +24,7 @@ interface CombinedAyah {
   arabicText: string;
   translationText: string;
   audio?: string;
+  localAudio?: string;
 }
 
 export default function SurahDetailScreen() {
@@ -32,6 +34,7 @@ export default function SurahDetailScreen() {
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const { isBookmarked, toggleBookmark, playAudio, pauseAudio, isPlaying, currentAudio, isLoading } = useQuran();
+  const { surahStatus, downloadSurah } = useDownload();
 
   const [ayahs, setAyahs] = useState<CombinedAyah[]>([]);
   const [surahName, setSurahName] = useState("");
@@ -41,6 +44,8 @@ export default function SurahDetailScreen() {
   const [error, setError] = useState(false);
 
   const surahNumber = parseInt(id || "1", 10);
+  const isDownloaded = surahStatus[surahNumber] === "downloaded";
+  const isDownloading = surahStatus[surahNumber] === "downloading";
 
   const loadSurah = async () => {
     setLoading(true);
@@ -57,13 +62,17 @@ export default function SurahDetailScreen() {
         setSurahEnglishName(arabicData[0].surah.englishName);
       }
 
-      const combined: CombinedAyah[] = arabicData.map((a, i) => ({
-        number: a.number,
-        numberInSurah: a.numberInSurah,
-        arabicText: a.text,
-        translationText: translationData[i]?.text || "",
-        audio: a.audio,
-      }));
+      const combined: CombinedAyah[] = arabicData.map((a, i) => {
+        const localUri = getLocalAudioUri(surahNumber, a.numberInSurah);
+        return {
+          number: a.number,
+          numberInSurah: a.numberInSurah,
+          arabicText: a.text,
+          translationText: translationData[i]?.text || "",
+          audio: a.audio,
+          localAudio: localUri || undefined,
+        };
+      });
 
       setAyahs(combined);
     } catch {
@@ -78,12 +87,14 @@ export default function SurahDetailScreen() {
   }, [surahNumber]);
 
   const handlePlay = useCallback(
-    async (audioUrl: string) => {
+    async (ayah: CombinedAyah) => {
+      const audioSource = ayah.localAudio || ayah.audio;
+      if (!audioSource) return;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      if (isPlaying && currentAudio === audioUrl) {
+      if (isPlaying && currentAudio === audioSource) {
         await pauseAudio();
       } else {
-        await playAudio(audioUrl);
+        await playAudio(audioSource);
       }
     },
     [isPlaying, currentAudio, playAudio, pauseAudio]
@@ -105,6 +116,12 @@ export default function SurahDetailScreen() {
     [surahNumber, surahArabicName, surahEnglishName, toggleBookmark]
   );
 
+  const handleDownload = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await downloadSurah(surahNumber);
+    loadSurah();
+  }, [surahNumber, downloadSurah]);
+
   const webTopInset = Platform.OS === "web" ? 67 : 0;
 
   const renderAyah = ({ item }: { item: CombinedAyah }) => (
@@ -113,8 +130,8 @@ export default function SurahDetailScreen() {
       theme={theme}
       isDark={isDark}
       isBookmarked={isBookmarked(item.number)}
-      isCurrentPlaying={isPlaying && currentAudio === item.audio}
-      isCurrentLoading={isLoading && currentAudio === item.audio}
+      isCurrentPlaying={isPlaying && currentAudio === (item.localAudio || item.audio)}
+      isCurrentLoading={isLoading && currentAudio === (item.localAudio || item.audio)}
       onPlay={handlePlay}
       onBookmark={handleBookmark}
     />
@@ -162,7 +179,26 @@ export default function SurahDetailScreen() {
           </Text>
           <Text style={[styles.topBarSubtitle, { color: theme.textSecondary }]}>{surahName}</Text>
         </View>
-        <View style={{ width: 36 }} />
+        {Platform.OS !== "web" ? (
+          <Pressable
+            onPress={isDownloaded ? undefined : handleDownload}
+            hitSlop={12}
+            disabled={isDownloading}
+            style={({ pressed }) => [styles.backButton, { opacity: pressed ? 0.6 : 1 }]}
+          >
+            {isDownloading ? (
+              <ActivityIndicator size="small" color={theme.tint} />
+            ) : (
+              <Ionicons
+                name={isDownloaded ? "checkmark-circle" : "download-outline"}
+                size={22}
+                color={isDownloaded ? theme.tint : theme.text}
+              />
+            )}
+          </Pressable>
+        ) : (
+          <View style={{ width: 36 }} />
+        )}
       </View>
 
       <FlatList
@@ -204,9 +240,11 @@ function AyahCard({
   isBookmarked: boolean;
   isCurrentPlaying: boolean;
   isCurrentLoading: boolean;
-  onPlay: (url: string) => void;
+  onPlay: (ayah: CombinedAyah) => void;
   onBookmark: (ayah: CombinedAyah) => void;
 }) {
+  const hasAudio = !!(ayah.localAudio || ayah.audio);
+
   return (
     <View style={[styles.ayahCard, { backgroundColor: theme.ayahBg, borderColor: theme.border }]}>
       <View style={styles.ayahHeader}>
@@ -219,8 +257,8 @@ function AyahCard({
           <Text style={[styles.verseNumText, { color: theme.verseNumber }]}>{ayah.numberInSurah}</Text>
         </View>
         <View style={styles.ayahActions}>
-          {ayah.audio ? (
-            <Pressable onPress={() => onPlay(ayah.audio!)} hitSlop={8}>
+          {hasAudio ? (
+            <Pressable onPress={() => onPlay(ayah)} hitSlop={8}>
               {isCurrentLoading ? (
                 <ActivityIndicator size="small" color={theme.tint} />
               ) : (

@@ -15,12 +15,15 @@ import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { fetchSurahs, Surah, getArabicNumber } from "@/lib/quran-api";
+import { useDownload } from "@/lib/download-context";
 
 export default function SurahsScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
+  const { surahStatus, isDownloadingAll, downloadProgress, downloadAllContent, cancelDownload, totalDownloaded } =
+    useDownload();
 
   const [surahs, setSurahs] = useState<Surah[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,40 +55,58 @@ export default function SurahsScreen() {
   );
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
+  const allDownloaded = totalDownloaded === 114;
 
-  const renderSurah = ({ item }: { item: Surah }) => (
-    <Pressable
-      onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        router.push({ pathname: "/surah/[id]", params: { id: item.number.toString() } });
-      }}
-      style={({ pressed }) => [
-        styles.surahItem,
-        {
-          backgroundColor: pressed
-            ? isDark
-              ? "rgba(255,255,255,0.05)"
-              : "rgba(0,0,0,0.03)"
-            : "transparent",
-        },
-      ]}
-    >
-      <View style={[styles.surahNumber, { backgroundColor: isDark ? "rgba(46,170,138,0.15)" : "rgba(13,92,77,0.08)" }]}>
-        <Text style={[styles.surahNumberText, { color: theme.tint }]}>{item.number}</Text>
-      </View>
-      <View style={styles.surahInfo}>
-        <Text style={[styles.surahName, { color: theme.text, fontFamily: "Inter_600SemiBold" }]}>
-          {item.englishName}
-        </Text>
-        <Text style={[styles.surahMeta, { color: theme.textSecondary }]}>
-          {item.revelationType} - {item.numberOfAyahs} Ayahs
-        </Text>
-      </View>
-      <View style={styles.surahRight}>
-        <Text style={[styles.arabicName, { color: theme.text }]}>{item.name}</Text>
-      </View>
-    </Pressable>
-  );
+  const handleDownloadAll = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (isDownloadingAll) {
+      cancelDownload();
+    } else {
+      await downloadAllContent();
+    }
+  };
+
+  const renderSurah = ({ item }: { item: Surah }) => {
+    const status = surahStatus[item.number];
+    return (
+      <Pressable
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          router.push({ pathname: "/surah/[id]", params: { id: item.number.toString() } });
+        }}
+        style={({ pressed }) => [
+          styles.surahItem,
+          {
+            backgroundColor: pressed
+              ? isDark
+                ? "rgba(255,255,255,0.05)"
+                : "rgba(0,0,0,0.03)"
+              : "transparent",
+          },
+        ]}
+      >
+        <View style={[styles.surahNumber, { backgroundColor: isDark ? "rgba(46,170,138,0.15)" : "rgba(13,92,77,0.08)" }]}>
+          <Text style={[styles.surahNumberText, { color: theme.tint }]}>{item.number}</Text>
+        </View>
+        <View style={styles.surahInfo}>
+          <Text style={[styles.surahName, { color: theme.text, fontFamily: "Inter_600SemiBold" }]}>
+            {item.englishName}
+          </Text>
+          <Text style={[styles.surahMeta, { color: theme.textSecondary }]}>
+            {item.revelationType} - {item.numberOfAyahs} Ayahs
+          </Text>
+        </View>
+        <View style={styles.surahRight}>
+          <Text style={[styles.arabicName, { color: theme.text }]}>{item.name}</Text>
+          {status === "downloaded" ? (
+            <Ionicons name="checkmark-circle" size={14} color={theme.tint} style={{ marginTop: 4 }} />
+          ) : status === "downloading" ? (
+            <ActivityIndicator size="small" color={theme.tint} style={{ marginTop: 4 }} />
+          ) : null}
+        </View>
+      </Pressable>
+    );
+  };
 
   if (loading) {
     return (
@@ -127,6 +148,67 @@ export default function SurahsScreen() {
           <View style={styles.listHeader}>
             <Text style={[styles.title, { color: theme.text, fontFamily: "Inter_600SemiBold" }]}>Surahs</Text>
             <Text style={[styles.subtitle, { color: theme.textSecondary }]}>114 Chapters of the Holy Quran</Text>
+
+            {Platform.OS !== "web" ? (
+              <View style={styles.downloadSection}>
+                {isDownloadingAll && downloadProgress ? (
+                  <View style={[styles.downloadCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                    <View style={styles.downloadCardTop}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.downloadTitle, { color: theme.text, fontFamily: "Inter_600SemiBold" }]}>
+                          Downloading...
+                        </Text>
+                        <Text style={[styles.downloadSubtext, { color: theme.textSecondary }]}>
+                          Surah {downloadProgress.currentSurah} of {downloadProgress.totalSurahs}
+                          {" "}({downloadProgress.overallPercent}%)
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={handleDownloadAll}
+                        hitSlop={12}
+                        style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                      >
+                        <Ionicons name="close-circle" size={28} color={theme.textSecondary} />
+                      </Pressable>
+                    </View>
+                    <View style={[styles.progressBarBg, { backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }]}>
+                      <View
+                        style={[
+                          styles.progressBarFill,
+                          { backgroundColor: theme.tint, width: `${downloadProgress.overallPercent}%` as any },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                ) : allDownloaded ? (
+                  <View style={[styles.downloadCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                    <View style={styles.downloadCardTop}>
+                      <Ionicons name="checkmark-circle" size={22} color={theme.tint} />
+                      <Text style={[styles.downloadTitle, { color: theme.tint, fontFamily: "Inter_600SemiBold", marginLeft: 8 }]}>
+                        All content downloaded
+                      </Text>
+                    </View>
+                    <Text style={[styles.downloadSubtext, { color: theme.textSecondary, marginTop: 4 }]}>
+                      The app works offline now
+                    </Text>
+                  </View>
+                ) : (
+                  <Pressable
+                    onPress={handleDownloadAll}
+                    style={({ pressed }) => [
+                      styles.downloadButton,
+                      { backgroundColor: theme.tint, opacity: pressed ? 0.85 : 1 },
+                    ]}
+                  >
+                    <Ionicons name="cloud-download-outline" size={20} color="#fff" />
+                    <Text style={styles.downloadButtonText}>
+                      Download All for Offline
+                      {totalDownloaded > 0 ? ` (${totalDownloaded}/114)` : ""}
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+            ) : null}
           </View>
         }
         ItemSeparatorComponent={() => (
@@ -159,6 +241,48 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 4,
     fontFamily: "Inter_400Regular",
+  },
+  downloadSection: {
+    marginTop: 16,
+  },
+  downloadButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 14,
+    borderRadius: 14,
+    gap: 8,
+  },
+  downloadButtonText: {
+    color: "#fff",
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+  },
+  downloadCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 16,
+  },
+  downloadCardTop: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  downloadTitle: {
+    fontSize: 15,
+  },
+  downloadSubtext: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+  },
+  progressBarBg: {
+    height: 6,
+    borderRadius: 3,
+    marginTop: 12,
+    overflow: "hidden",
+  },
+  progressBarFill: {
+    height: 6,
+    borderRadius: 3,
   },
   surahItem: {
     flexDirection: "row",

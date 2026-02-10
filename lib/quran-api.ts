@@ -153,12 +153,12 @@ async function getDailyVerseFromCache(globalAyahNumber: number): Promise<{
   }
 }
 
-export async function getLocalAudioUri(
+export function getLocalAudioUri(
   surahNumber: number,
   ayahNumberInSurah: number
-): Promise<string | null> {
+): string | null {
   if (Platform.OS === "web") return null;
-  const downloaded = await isAudioDownloaded(surahNumber, ayahNumberInSurah);
+  const downloaded = isAudioDownloaded(surahNumber, ayahNumberInSurah);
   if (downloaded) {
     return getAudioFilePath(surahNumber, ayahNumberInSurah);
   }
