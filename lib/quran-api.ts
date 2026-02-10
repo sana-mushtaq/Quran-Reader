@@ -1,172 +1,91 @@
-import surahListData from "@/assets/data/surah-list.json";
-import quranData from "@/assets/data/quran-data.json";
-
-export interface SurahInfo {
+export interface Surah {
   number: number;
   name: string;
   englishName: string;
   englishNameTranslation: string;
-  revelationType: string;
   numberOfAyahs: number;
-}
-
-export interface AyahData {
-  globalNumber: number;
-  numberInSurah: number;
-  surahNumber: number;
-  arabicText: string;
-  translation: string;
-  audio?: string;
-}
-
-export interface QuranPage {
-  pageNumber: number;
-  ayahs: AyahData[];
-  surahHeaders: { surahNumber: number; beforeAyahIndex: number }[];
-}
-
-const typedQuranData = quranData as Record<string, {
-  number: number;
-  name: string;
-  englishName: string;
-  englishNameTranslation: string;
-  numberOfAyahs?: number;
   revelationType: string;
-  ayahs: Array<{
+}
+
+export interface Ayah {
+  number: number;
+  text: string;
+  numberInSurah: number;
+  juz: number;
+  page: number;
+  hizbQuarter: number;
+}
+
+export interface AyahEdition {
+  number: number;
+  text: string;
+  numberInSurah: number;
+  audio?: string;
+  surah?: {
     number: number;
-    numberInSurah: number;
-    text: string;
-    audio?: string;
-    translation: string;
-  }>;
-}>;
+    name: string;
+    englishName: string;
+    englishNameTranslation: string;
+    numberOfAyahs: number;
+    revelationType: string;
+  };
+}
 
-const surahList: SurahInfo[] = (surahListData as any[]).map((s) => ({
-  number: s.number,
-  name: s.name,
-  englishName: s.englishName,
-  englishNameTranslation: s.englishNameTranslation,
-  revelationType: s.revelationType,
-  numberOfAyahs: typedQuranData[s.number.toString()]?.ayahs?.length ?? 0,
-}));
+const BASE_URL = "https://api.alquran.cloud/v1";
 
-let allAyahsCache: AyahData[] | null = null;
-let allPagesCache: QuranPage[] | null = null;
-let surahPageMapCache: Map<number, number> | null = null;
+export async function fetchSurahs(): Promise<Surah[]> {
+  const res = await fetch(`${BASE_URL}/surah`);
+  const json = await res.json();
+  if (json.code === 200) return json.data;
+  throw new Error("Failed to fetch surahs");
+}
 
-function getAllAyahs(): AyahData[] {
-  if (allAyahsCache) return allAyahsCache;
-  const ayahs: AyahData[] = [];
-  for (let s = 1; s <= 114; s++) {
-    const surah = typedQuranData[s.toString()];
-    if (!surah) continue;
-    for (const a of surah.ayahs) {
-      ayahs.push({
-        globalNumber: a.number,
-        numberInSurah: a.numberInSurah,
-        surahNumber: s,
-        arabicText: a.text,
-        translation: a.translation,
-        audio: a.audio,
-      });
-    }
+export async function fetchSurahArabic(surahNumber: number): Promise<AyahEdition[]> {
+  const res = await fetch(`${BASE_URL}/surah/${surahNumber}/ar.alafasy`);
+  const json = await res.json();
+  if (json.code === 200) return json.data.ayahs;
+  throw new Error("Failed to fetch surah arabic");
+}
+
+export async function fetchSurahTranslation(surahNumber: number): Promise<AyahEdition[]> {
+  const res = await fetch(`${BASE_URL}/surah/${surahNumber}/en.asad`);
+  const json = await res.json();
+  if (json.code === 200) return json.data.ayahs;
+  throw new Error("Failed to fetch surah translation");
+}
+
+export async function fetchRandomAyah(): Promise<{
+  arabic: AyahEdition;
+  translation: AyahEdition;
+}> {
+  const today = new Date();
+  const dayOfYear = Math.floor(
+    (today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86400000
+  );
+  const ayahNumber = (dayOfYear % 6236) + 1;
+
+  const [arabicRes, translationRes] = await Promise.all([
+    fetch(`${BASE_URL}/ayah/${ayahNumber}/ar.alafasy`),
+    fetch(`${BASE_URL}/ayah/${ayahNumber}/en.asad`),
+  ]);
+
+  const arabicJson = await arabicRes.json();
+  const translationJson = await translationRes.json();
+
+  if (arabicJson.code === 200 && translationJson.code === 200) {
+    return {
+      arabic: arabicJson.data,
+      translation: translationJson.data,
+    };
   }
-  allAyahsCache = ayahs;
-  return ayahs;
-}
-
-const AYAHS_PER_PAGE = 6;
-
-function buildPages(): QuranPage[] {
-  if (allPagesCache) return allPagesCache;
-  const allAyahs = getAllAyahs();
-  const pages: QuranPage[] = [];
-  let currentPage: AyahData[] = [];
-  let surahHeaders: { surahNumber: number; beforeAyahIndex: number }[] = [];
-  let lastSurah = 0;
-
-  for (const ayah of allAyahs) {
-    if (ayah.surahNumber !== lastSurah) {
-      if (currentPage.length > 0 && currentPage.length >= 3) {
-        pages.push({
-          pageNumber: pages.length + 1,
-          ayahs: [...currentPage],
-          surahHeaders: [...surahHeaders],
-        });
-        currentPage = [];
-        surahHeaders = [];
-      }
-      surahHeaders.push({ surahNumber: ayah.surahNumber, beforeAyahIndex: currentPage.length });
-      lastSurah = ayah.surahNumber;
-    }
-
-    currentPage.push(ayah);
-
-    if (currentPage.length >= AYAHS_PER_PAGE) {
-      pages.push({
-        pageNumber: pages.length + 1,
-        ayahs: [...currentPage],
-        surahHeaders: [...surahHeaders],
-      });
-      currentPage = [];
-      surahHeaders = [];
-    }
-  }
-
-  if (currentPage.length > 0) {
-    pages.push({
-      pageNumber: pages.length + 1,
-      ayahs: [...currentPage],
-      surahHeaders: [...surahHeaders],
-    });
-  }
-
-  allPagesCache = pages;
-  return pages;
-}
-
-function buildSurahPageMap(): Map<number, number> {
-  if (surahPageMapCache) return surahPageMapCache;
-  const pages = buildPages();
-  const map = new Map<number, number>();
-  for (const page of pages) {
-    for (const ayah of page.ayahs) {
-      if (!map.has(ayah.surahNumber)) {
-        map.set(ayah.surahNumber, page.pageNumber);
-      }
-    }
-  }
-  surahPageMapCache = map;
-  return map;
-}
-
-export function getSurahList(): SurahInfo[] {
-  return surahList;
-}
-
-export function getSurahInfo(surahNumber: number): SurahInfo | undefined {
-  return surahList.find((s) => s.number === surahNumber);
-}
-
-export function getQuranPages(): QuranPage[] {
-  return buildPages();
-}
-
-export function getTotalPages(): number {
-  return buildPages().length;
-}
-
-export function getPage(pageNumber: number): QuranPage | undefined {
-  const pages = buildPages();
-  return pages[pageNumber - 1];
-}
-
-export function getPageForSurah(surahNumber: number): number {
-  const map = buildSurahPageMap();
-  return map.get(surahNumber) ?? 1;
+  throw new Error("Failed to fetch daily ayah");
 }
 
 export function getArabicNumber(num: number): string {
   const arabicDigits = ["\u0660", "\u0661", "\u0662", "\u0663", "\u0664", "\u0665", "\u0666", "\u0667", "\u0668", "\u0669"];
-  return num.toString().split("").map((d) => arabicDigits[parseInt(d)]).join("");
+  return num
+    .toString()
+    .split("")
+    .map((d) => arabicDigits[parseInt(d)])
+    .join("");
 }
