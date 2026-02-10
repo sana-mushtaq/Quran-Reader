@@ -1,6 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Paths, File as FSFile, Directory as FSDirectory } from "expo-file-system";
-import ExpoFileSystem from "expo-file-system/src/ExpoFileSystem";
 import { Platform } from "react-native";
 import { Surah, AyahEdition } from "./quran-api";
 
@@ -102,7 +101,7 @@ export async function downloadAyahAudio(
   const dir = getAudioDir();
   if (!dir) return;
 
-  await ExpoFileSystem.downloadFileAsync(audioUrl, file);
+  await FSFile.downloadFileAsync(audioUrl, file);
 }
 
 export function deleteSurahAudio(surahNumber: number, totalAyahs: number): void {

@@ -16,7 +16,14 @@ Preferred communication style: Simple, everyday language.
   - Tab layout at `app/(tabs)/` with three tabs: Home (daily verse), Surahs (browse list), Bookmarks (saved ayahs)
   - Dynamic route `app/surah/[id].tsx` for individual surah detail/reading view
 - **State Management**: React Context (`QuranProvider` in `lib/quran-context.tsx`) for bookmarks and audio playback state, plus TanStack React Query for server data fetching
-- **Data Persistence**: AsyncStorage for local bookmark storage on device
+- **Data Persistence**: AsyncStorage for local bookmark storage and offline Quran data caching
+- **Offline Support**: Full offline mode with downloadable text and audio content
+  - `lib/offline-storage.ts`: Manages caching surah text data in AsyncStorage and audio files via expo-file-system (new `File`/`Directory`/`Paths` API)
+  - `lib/download-context.tsx`: `DownloadProvider` context for download progress tracking, per-surah and bulk download management
+  - Text data (Arabic + translations) cached in AsyncStorage per-surah
+  - Audio files downloaded to `Paths.document/quran_audio/` as individual MP3 files
+  - `quran-api.ts` checks cache first, falls back to network
+  - Surah detail page uses local audio files when available
 - **Audio**: `expo-av` for Quran recitation playback with background audio support
 - **Fonts**: Google Fonts — Inter (UI text) and Amiri (Arabic text)
 - **Styling**: StyleSheet-based with a custom theme system (`constants/colors.ts`) supporting light/dark modes via `useColorScheme`
