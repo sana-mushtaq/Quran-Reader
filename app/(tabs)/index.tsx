@@ -35,28 +35,13 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { isBookmarked, toggleBookmark, playAudio, pauseAudio, isPlaying, currentAudio, isLoading } = useQuran();
 
-  const [dailyArabic, setDailyArabic] = useState<AyahEdition | null>(null);
-  const [dailyTranslation, setDailyTranslation] = useState<AyahEdition | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const dailyData = fetchRandomAyah();
+  const dailyArabic = dailyData.arabic;
+  const dailyTranslation = dailyData.translation;
 
   const [prayerTimes, setPrayerTimes] = useState<PrayerTimings | null>(null);
   const [prayerLocation, setPrayerLocation] = useState<PrayerLocation | null>(null);
   const [prayerLoading, setPrayerLoading] = useState(true);
-
-  const loadDailyVerse = async () => {
-    setLoading(true);
-    setError(false);
-    try {
-      const data = await fetchRandomAyah();
-      setDailyArabic(data.arabic);
-      setDailyTranslation(data.translation);
-    } catch {
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const loadPrayerTimes = async () => {
     setPrayerLoading(true);
@@ -70,7 +55,6 @@ export default function HomeScreen() {
   };
 
   useEffect(() => {
-    loadDailyVerse();
     loadPrayerTimes();
   }, []);
 
@@ -197,29 +181,8 @@ export default function HomeScreen() {
         </Text>
       </View>
 
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.tint} />
-        </View>
-      ) : error ? (
-        <View style={styles.errorContainer}>
-          <Ionicons name="cloud-offline-outline" size={48} color={theme.textSecondary} />
-          <Text style={[styles.errorText, { color: theme.textSecondary }]}>
-            Could not load the daily verse
-          </Text>
-          <Pressable
-            onPress={loadDailyVerse}
-            style={({ pressed }) => [
-              styles.retryButton,
-              { backgroundColor: theme.tint, opacity: pressed ? 0.8 : 1 },
-            ]}
-          >
-            <Text style={styles.retryText}>Try Again</Text>
-          </Pressable>
-        </View>
-      ) : dailyArabic && dailyTranslation ? (
-        <View>
-          <LinearGradient
+      <View>
+        <LinearGradient
             colors={isDark ? ["#1A3A2E", "#0F2B23"] : ["#147A64", "#0D5C4D"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
@@ -263,8 +226,7 @@ export default function HomeScreen() {
               {dailyArabic.numberInSurah}
             </Text>
           </LinearGradient>
-        </View>
-      ) : null}
+      </View>
     </ScrollView>
   );
 }
@@ -327,17 +289,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   prayerNameActive: { color: "#C8A951" },
-  loadingContainer: { height: 200, justifyContent: "center", alignItems: "center" },
-  errorContainer: {
-    height: 200,
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 40,
-  },
-  errorText: { fontSize: 15, textAlign: "center", fontFamily: "Inter_400Regular" },
-  retryButton: { paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20, marginTop: 4 },
-  retryText: { color: "#fff", fontSize: 14, fontFamily: "Inter_600SemiBold" },
   dailyCard: { marginHorizontal: 16, marginTop: 12, borderRadius: 20, padding: 24 },
   cardHeader: {
     flexDirection: "row",

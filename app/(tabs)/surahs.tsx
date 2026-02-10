@@ -1,11 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   StyleSheet,
   Text,
   View,
   FlatList,
   Pressable,
-  ActivityIndicator,
   useColorScheme,
   Platform,
 } from "react-native";
@@ -22,27 +21,8 @@ export default function SurahsScreen() {
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
 
-  const [surahs, setSurahs] = useState<Surah[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const surahs = fetchSurahs();
   const [searchQuery, setSearchQuery] = useState("");
-
-  const loadSurahs = async () => {
-    setLoading(true);
-    setError(false);
-    try {
-      const data = await fetchSurahs();
-      setSurahs(data);
-    } catch {
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadSurahs();
-  }, []);
 
   const filtered = surahs.filter(
     (s) =>
@@ -87,34 +67,6 @@ export default function SurahsScreen() {
     </Pressable>
   );
 
-  if (loading) {
-    return (
-      <View style={[styles.centered, { backgroundColor: theme.background, paddingTop: insets.top + webTopInset }]}>
-        <ActivityIndicator size="large" color={theme.tint} />
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={[styles.centered, { backgroundColor: theme.background, paddingTop: insets.top + webTopInset }]}>
-        <Ionicons name="cloud-offline-outline" size={48} color={theme.textSecondary} />
-        <Text style={[styles.errorText, { color: theme.textSecondary }]}>
-          Could not load surahs
-        </Text>
-        <Pressable
-          onPress={loadSurahs}
-          style={({ pressed }) => [
-            styles.retryButton,
-            { backgroundColor: theme.tint, opacity: pressed ? 0.8 : 1 },
-          ]}
-        >
-          <Text style={styles.retryText}>Try Again</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <FlatList
@@ -140,12 +92,6 @@ export default function SurahsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 12,
   },
   listHeader: {
     paddingHorizontal: 20,
@@ -199,21 +145,5 @@ const styles = StyleSheet.create({
   separator: {
     height: 1,
     marginLeft: 74,
-  },
-  errorText: {
-    fontSize: 15,
-    textAlign: "center",
-    fontFamily: "Inter_400Regular",
-  },
-  retryButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 20,
-    marginTop: 4,
-  },
-  retryText: {
-    color: "#fff",
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
   },
 });

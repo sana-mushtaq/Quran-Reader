@@ -1,3 +1,6 @@
+import surahListData from "@/assets/data/surah-list.json";
+import quranData from "@/assets/data/quran-data.json";
+
 export interface Surah {
   number: number;
   name: string;
@@ -31,54 +34,135 @@ export interface AyahEdition {
   };
 }
 
-const BASE_URL = "https://api.alquran.cloud/v1";
+const typedQuranData = quranData as Record<string, {
+  number: number;
+  name: string;
+  englishName: string;
+  englishNameTranslation: string;
+  numberOfAyahs: number;
+  revelationType: string;
+  ayahs: Array<{
+    number: number;
+    numberInSurah: number;
+    text: string;
+    audio?: string;
+    translation: string;
+  }>;
+}>;
 
-export async function fetchSurahs(): Promise<Surah[]> {
-  const res = await fetch(`${BASE_URL}/surah`);
-  const json = await res.json();
-  if (json.code === 200) return json.data;
-  throw new Error("Failed to fetch surahs");
+export function fetchSurahs(): Surah[] {
+  return surahListData as Surah[];
 }
 
-export async function fetchSurahArabic(surahNumber: number): Promise<AyahEdition[]> {
-  const res = await fetch(`${BASE_URL}/surah/${surahNumber}/ar.alafasy`);
-  const json = await res.json();
-  if (json.code === 200) return json.data.ayahs;
-  throw new Error("Failed to fetch surah arabic");
+export function fetchSurahArabic(surahNumber: number): AyahEdition[] {
+  const surah = typedQuranData[surahNumber.toString()];
+  if (!surah) throw new Error("Surah not found");
+
+  return surah.ayahs.map((a) => ({
+    number: a.number,
+    text: a.text,
+    numberInSurah: a.numberInSurah,
+    audio: a.audio,
+    surah: {
+      number: surah.number,
+      name: surah.name,
+      englishName: surah.englishName,
+      englishNameTranslation: surah.englishNameTranslation,
+      numberOfAyahs: surah.numberOfAyahs,
+      revelationType: surah.revelationType,
+    },
+  }));
 }
 
-export async function fetchSurahTranslation(surahNumber: number): Promise<AyahEdition[]> {
-  const res = await fetch(`${BASE_URL}/surah/${surahNumber}/en.asad`);
-  const json = await res.json();
-  if (json.code === 200) return json.data.ayahs;
-  throw new Error("Failed to fetch surah translation");
+export function fetchSurahTranslation(surahNumber: number): AyahEdition[] {
+  const surah = typedQuranData[surahNumber.toString()];
+  if (!surah) throw new Error("Surah not found");
+
+  return surah.ayahs.map((a) => ({
+    number: a.number,
+    text: a.translation,
+    numberInSurah: a.numberInSurah,
+    surah: {
+      number: surah.number,
+      name: surah.name,
+      englishName: surah.englishName,
+      englishNameTranslation: surah.englishNameTranslation,
+      numberOfAyahs: surah.numberOfAyahs,
+      revelationType: surah.revelationType,
+    },
+  }));
 }
 
-export async function fetchRandomAyah(): Promise<{
+export function fetchRandomAyah(): {
   arabic: AyahEdition;
   translation: AyahEdition;
-}> {
+} {
   const today = new Date();
   const dayOfYear = Math.floor(
     (today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86400000
   );
-  const ayahNumber = (dayOfYear % 6236) + 1;
+  const totalAyahs = 6236;
+  const ayahIndex = (dayOfYear % totalAyahs) + 1;
 
-  const [arabicRes, translationRes] = await Promise.all([
-    fetch(`${BASE_URL}/ayah/${ayahNumber}/ar.alafasy`),
-    fetch(`${BASE_URL}/ayah/${ayahNumber}/en.asad`),
-  ]);
-
-  const arabicJson = await arabicRes.json();
-  const translationJson = await translationRes.json();
-
-  if (arabicJson.code === 200 && translationJson.code === 200) {
-    return {
-      arabic: arabicJson.data,
-      translation: translationJson.data,
-    };
+  let globalCount = 0;
+  for (let s = 1; s <= 114; s++) {
+    const surah = typedQuranData[s.toString()];
+    if (!surah) continue;
+    for (const ayah of surah.ayahs) {
+      globalCount++;
+      if (globalCount === ayahIndex) {
+        const surahInfo = {
+          number: surah.number,
+          name: surah.name,
+          englishName: surah.englishName,
+          englishNameTranslation: surah.englishNameTranslation,
+          numberOfAyahs: surah.numberOfAyahs,
+          revelationType: surah.revelationType,
+        };
+        return {
+          arabic: {
+            number: ayah.number,
+            text: ayah.text,
+            numberInSurah: ayah.numberInSurah,
+            audio: ayah.audio,
+            surah: surahInfo,
+          },
+          translation: {
+            number: ayah.number,
+            text: ayah.translation,
+            numberInSurah: ayah.numberInSurah,
+            surah: surahInfo,
+          },
+        };
+      }
+    }
   }
-  throw new Error("Failed to fetch daily ayah");
+
+  const fallback = typedQuranData["1"];
+  const firstAyah = fallback.ayahs[0];
+  const fallbackSurah = {
+    number: fallback.number,
+    name: fallback.name,
+    englishName: fallback.englishName,
+    englishNameTranslation: fallback.englishNameTranslation,
+    numberOfAyahs: fallback.numberOfAyahs,
+    revelationType: fallback.revelationType,
+  };
+  return {
+    arabic: {
+      number: firstAyah.number,
+      text: firstAyah.text,
+      numberInSurah: firstAyah.numberInSurah,
+      audio: firstAyah.audio,
+      surah: fallbackSurah,
+    },
+    translation: {
+      number: firstAyah.number,
+      text: firstAyah.translation,
+      numberInSurah: firstAyah.numberInSurah,
+      surah: fallbackSurah,
+    },
+  };
 }
 
 export function getArabicNumber(num: number): string {

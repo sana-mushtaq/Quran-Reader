@@ -1,11 +1,10 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   StyleSheet,
   Text,
   View,
   FlatList,
   Pressable,
-  ActivityIndicator,
   useColorScheme,
   Platform,
 } from "react-native";
@@ -33,48 +32,28 @@ export default function SurahDetailScreen() {
   const insets = useSafeAreaInsets();
   const { isBookmarked, toggleBookmark, playAudio, pauseAudio, isPlaying, currentAudio, isLoading } = useQuran();
 
-  const [ayahs, setAyahs] = useState<CombinedAyah[]>([]);
-  const [surahName, setSurahName] = useState("");
-  const [surahArabicName, setSurahArabicName] = useState("");
-  const [surahEnglishName, setSurahEnglishName] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-
   const surahNumber = parseInt(id || "1", 10);
 
-  const loadSurah = async () => {
-    setLoading(true);
-    setError(false);
-    try {
-      const [arabicData, translationData] = await Promise.all([
-        fetchSurahArabic(surahNumber),
-        fetchSurahTranslation(surahNumber),
-      ]);
+  const { ayahs, surahName, surahArabicName, surahEnglishName } = useMemo(() => {
+    const arabicData = fetchSurahArabic(surahNumber);
+    const translationData = fetchSurahTranslation(surahNumber);
 
-      if (arabicData.length > 0 && arabicData[0].surah) {
-        setSurahName(arabicData[0].surah.englishNameTranslation);
-        setSurahArabicName(arabicData[0].surah.name);
-        setSurahEnglishName(arabicData[0].surah.englishName);
-      }
+    const name = arabicData.length > 0 && arabicData[0].surah
+      ? arabicData[0].surah.englishNameTranslation : "";
+    const arabicName = arabicData.length > 0 && arabicData[0].surah
+      ? arabicData[0].surah.name : "";
+    const englishName = arabicData.length > 0 && arabicData[0].surah
+      ? arabicData[0].surah.englishName : "";
 
-      const combined: CombinedAyah[] = arabicData.map((a, i) => ({
-        number: a.number,
-        numberInSurah: a.numberInSurah,
-        arabicText: a.text,
-        translationText: translationData[i]?.text || "",
-        audio: a.audio,
-      }));
+    const combined: CombinedAyah[] = arabicData.map((a, i) => ({
+      number: a.number,
+      numberInSurah: a.numberInSurah,
+      arabicText: a.text,
+      translationText: translationData[i]?.text || "",
+      audio: a.audio,
+    }));
 
-      setAyahs(combined);
-    } catch {
-      setError(true);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadSurah();
+    return { ayahs: combined, surahName: name, surahArabicName: arabicName, surahEnglishName: englishName };
   }, [surahNumber]);
 
   const handlePlay = useCallback(
@@ -119,32 +98,6 @@ export default function SurahDetailScreen() {
       onBookmark={handleBookmark}
     />
   );
-
-  if (loading) {
-    return (
-      <View style={[styles.centered, { backgroundColor: theme.background, paddingTop: insets.top + webTopInset }]}>
-        <ActivityIndicator size="large" color={theme.tint} />
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={[styles.centered, { backgroundColor: theme.background, paddingTop: insets.top + webTopInset }]}>
-        <Ionicons name="cloud-offline-outline" size={48} color={theme.textSecondary} />
-        <Text style={[styles.errorText, { color: theme.textSecondary }]}>Could not load this surah</Text>
-        <Pressable
-          onPress={loadSurah}
-          style={({ pressed }) => [
-            styles.retryButton,
-            { backgroundColor: theme.tint, opacity: pressed ? 0.8 : 1 },
-          ]}
-        >
-          <Text style={styles.retryText}>Try Again</Text>
-        </Pressable>
-      </View>
-    );
-  }
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -253,12 +206,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 12,
-  },
   topBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -329,21 +276,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 22,
     fontFamily: "Inter_400Regular",
-  },
-  errorText: {
-    fontSize: 15,
-    textAlign: "center",
-    fontFamily: "Inter_400Regular",
-  },
-  retryButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 20,
-    marginTop: 4,
-  },
-  retryText: {
-    color: "#fff",
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
   },
 });

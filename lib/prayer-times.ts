@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Coordinates, PrayerTimes as AdhanPrayerTimes, CalculationMethod, SunnahTimes } from "adhan";
 
 export interface PrayerTimings {
   Fajr: string;
@@ -13,25 +14,30 @@ export interface PrayerTimings {
   hijriYear: string;
 }
 
-const PRAYER_CACHE_KEY = "@prayer_timings_cache";
 const LOCATION_KEY = "@prayer_location";
 
 export interface PrayerLocation {
   city: string;
   country: string;
-  latitude?: number;
-  longitude?: number;
+  latitude: number;
+  longitude: number;
 }
 
 const DEFAULT_LOCATION: PrayerLocation = {
   city: "Makkah",
   country: "Saudi Arabia",
+  latitude: 21.4225,
+  longitude: 39.8262,
 };
 
 export async function getSavedLocation(): Promise<PrayerLocation> {
   try {
     const stored = await AsyncStorage.getItem(LOCATION_KEY);
-    if (stored) return JSON.parse(stored);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed.latitude && parsed.longitude) return parsed;
+      return { ...DEFAULT_LOCATION, ...parsed };
+    }
   } catch {}
   return DEFAULT_LOCATION;
 }
@@ -42,51 +48,70 @@ export async function saveLocation(location: PrayerLocation): Promise<void> {
   } catch {}
 }
 
+function formatTime24(date: Date): string {
+  const h = date.getHours().toString().padStart(2, "0");
+  const m = date.getMinutes().toString().padStart(2, "0");
+  return `${h}:${m}`;
+}
+
+function toHijriDate(date: Date): { day: number; month: string; year: number } {
+  const hijriMonths = [
+    "Muharram", "Safar", "Rabi al-Awwal", "Rabi al-Thani",
+    "Jumada al-Ula", "Jumada al-Thani", "Rajab", "Sha'ban",
+    "Ramadan", "Shawwal", "Dhul Qi'dah", "Dhul Hijjah",
+  ];
+
+  const jd = Math.floor((date.getTime() / 86400000) + 2440587.5);
+  const l = jd - 1948440 + 10632;
+  const n = Math.floor((l - 1) / 10631);
+  const lRem = l - 10631 * n + 354;
+  const j = Math.floor((10985 - lRem) / 5316) * Math.floor((50 * lRem) / 17719) +
+    Math.floor(lRem / 5670) * Math.floor((43 * lRem) / 15238);
+  const lFinal = lRem - Math.floor((30 - j) / 15) * Math.floor((17719 * j) / 50) -
+    Math.floor(j / 16) * Math.floor((15238 * j) / 43) + 29;
+  const month = Math.floor((24 * lFinal) / 709);
+  const day = lFinal - Math.floor((709 * month) / 24);
+  const year = 30 * n + j - 30;
+
+  return {
+    day,
+    month: hijriMonths[month - 1] || "Unknown",
+    year,
+  };
+}
+
+export function calculatePrayerTimes(location: PrayerLocation): PrayerTimings {
+  const today = new Date();
+  const coordinates = new Coordinates(location.latitude, location.longitude);
+  const params = CalculationMethod.MuslimWorldLeague();
+
+  const prayerTimes = new AdhanPrayerTimes(coordinates, today, params);
+
+  const hijri = toHijriDate(today);
+
+  return {
+    Fajr: formatTime24(prayerTimes.fajr),
+    Sunrise: formatTime24(prayerTimes.sunrise),
+    Dhuhr: formatTime24(prayerTimes.dhuhr),
+    Asr: formatTime24(prayerTimes.asr),
+    Maghrib: formatTime24(prayerTimes.maghrib),
+    Isha: formatTime24(prayerTimes.isha),
+    date: today.toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }),
+    hijriDate: `${hijri.day} ${hijri.month} ${hijri.year}`,
+    hijriMonth: hijri.month,
+    hijriYear: hijri.year.toString(),
+  };
+}
+
 export async function fetchPrayerTimes(
   location: PrayerLocation
 ): Promise<PrayerTimings> {
-  const today = new Date();
-  const dateStr = `${today.getDate()}-${today.getMonth() + 1}-${today.getFullYear()}`;
-  const cacheKey = `${PRAYER_CACHE_KEY}_${location.city}_${dateStr}`;
-
-  try {
-    const cached = await AsyncStorage.getItem(cacheKey);
-    if (cached) return JSON.parse(cached);
-  } catch {}
-
-  let url: string;
-  if (location.latitude && location.longitude) {
-    url = `https://api.aladhan.com/v1/timings/${dateStr}?latitude=${location.latitude}&longitude=${location.longitude}&method=2`;
-  } else {
-    url = `https://api.aladhan.com/v1/timingsByCity/${dateStr}?city=${encodeURIComponent(location.city)}&country=${encodeURIComponent(location.country)}&method=2`;
-  }
-
-  const res = await fetch(url);
-  const json = await res.json();
-
-  if (json.code === 200) {
-    const timings = json.data.timings;
-    const hijri = json.data.date.hijri;
-    const result: PrayerTimings = {
-      Fajr: timings.Fajr,
-      Sunrise: timings.Sunrise,
-      Dhuhr: timings.Dhuhr,
-      Asr: timings.Asr,
-      Maghrib: timings.Maghrib,
-      Isha: timings.Isha,
-      date: json.data.date.readable,
-      hijriDate: `${hijri.day} ${hijri.month.en} ${hijri.year}`,
-      hijriMonth: hijri.month.en,
-      hijriYear: hijri.year,
-    };
-
-    try {
-      await AsyncStorage.setItem(cacheKey, JSON.stringify(result));
-    } catch {}
-
-    return result;
-  }
-  throw new Error("Failed to fetch prayer times");
+  return calculatePrayerTimes(location);
 }
 
 export function getNextPrayer(timings: PrayerTimings): { name: string; time: string } | null {
