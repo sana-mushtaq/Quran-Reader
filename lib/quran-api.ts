@@ -1,3 +1,15 @@
+import {
+  getCachedSurahsList,
+  cacheSurahsList,
+  getCachedSurahArabic,
+  cacheSurahArabic,
+  getCachedSurahTranslation,
+  cacheSurahTranslation,
+  getAudioFilePath,
+  isAudioDownloaded,
+} from "./offline-storage";
+import { Platform } from "react-native";
+
 export interface Surah {
   number: number;
   name: string;
@@ -34,23 +46,41 @@ export interface AyahEdition {
 const BASE_URL = "https://api.alquran.cloud/v1";
 
 export async function fetchSurahs(): Promise<Surah[]> {
+  const cached = await getCachedSurahsList();
+  if (cached) return cached;
+
   const res = await fetch(`${BASE_URL}/surah`);
   const json = await res.json();
-  if (json.code === 200) return json.data;
+  if (json.code === 200) {
+    await cacheSurahsList(json.data);
+    return json.data;
+  }
   throw new Error("Failed to fetch surahs");
 }
 
 export async function fetchSurahArabic(surahNumber: number): Promise<AyahEdition[]> {
+  const cached = await getCachedSurahArabic(surahNumber);
+  if (cached) return cached;
+
   const res = await fetch(`${BASE_URL}/surah/${surahNumber}/ar.alafasy`);
   const json = await res.json();
-  if (json.code === 200) return json.data.ayahs;
+  if (json.code === 200) {
+    await cacheSurahArabic(surahNumber, json.data.ayahs);
+    return json.data.ayahs;
+  }
   throw new Error("Failed to fetch surah arabic");
 }
 
 export async function fetchSurahTranslation(surahNumber: number): Promise<AyahEdition[]> {
+  const cached = await getCachedSurahTranslation(surahNumber);
+  if (cached) return cached;
+
   const res = await fetch(`${BASE_URL}/surah/${surahNumber}/en.asad`);
   const json = await res.json();
-  if (json.code === 200) return json.data.ayahs;
+  if (json.code === 200) {
+    await cacheSurahTranslation(surahNumber, json.data.ayahs);
+    return json.data.ayahs;
+  }
   throw new Error("Failed to fetch surah translation");
 }
 
@@ -63,6 +93,9 @@ export async function fetchRandomAyah(): Promise<{
     (today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86400000
   );
   const ayahNumber = (dayOfYear % 6236) + 1;
+
+  const cached = await getDailyVerseFromCache(ayahNumber);
+  if (cached) return cached;
 
   const [arabicRes, translationRes] = await Promise.all([
     fetch(`${BASE_URL}/ayah/${ayahNumber}/ar.alafasy`),
@@ -79,6 +112,57 @@ export async function fetchRandomAyah(): Promise<{
     };
   }
   throw new Error("Failed to fetch daily ayah");
+}
+
+async function getDailyVerseFromCache(globalAyahNumber: number): Promise<{
+  arabic: AyahEdition;
+  translation: AyahEdition;
+} | null> {
+  try {
+    const surahs = await getCachedSurahsList();
+    if (!surahs) return null;
+
+    let cumulative = 0;
+    let targetSurah: Surah | null = null;
+    let numberInSurah = 0;
+
+    for (const surah of surahs) {
+      if (cumulative + surah.numberOfAyahs >= globalAyahNumber) {
+        targetSurah = surah;
+        numberInSurah = globalAyahNumber - cumulative;
+        break;
+      }
+      cumulative += surah.numberOfAyahs;
+    }
+
+    if (!targetSurah) return null;
+
+    const arabicAyahs = await getCachedSurahArabic(targetSurah.number);
+    const translationAyahs = await getCachedSurahTranslation(targetSurah.number);
+
+    if (!arabicAyahs || !translationAyahs) return null;
+
+    const arabic = arabicAyahs.find((a) => a.numberInSurah === numberInSurah);
+    const translation = translationAyahs.find((a) => a.numberInSurah === numberInSurah);
+
+    if (!arabic || !translation) return null;
+
+    return { arabic, translation };
+  } catch {
+    return null;
+  }
+}
+
+export async function getLocalAudioUri(
+  surahNumber: number,
+  ayahNumberInSurah: number
+): Promise<string | null> {
+  if (Platform.OS === "web") return null;
+  const downloaded = await isAudioDownloaded(surahNumber, ayahNumberInSurah);
+  if (downloaded) {
+    return getAudioFilePath(surahNumber, ayahNumberInSurah);
+  }
+  return null;
 }
 
 export function getArabicNumber(num: number): string {
