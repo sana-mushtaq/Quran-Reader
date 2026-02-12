@@ -17,5 +17,5 @@
     "**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
-  ]
+, "components/SplashScreen.tsx", "lib/quran-context.tsx", "app/(tabs)/_layout.tsx", "app/(tabs)/bookmarks.tsx", "app/(tabs)/index.tsx", "app/(tabs)/surahs.tsx", "app/surah/[id].tsx", "app/_layout.tsx", "constants/colors.ts", "lib/download-context.tsx", "lib/offline-storage.ts", "lib/query-client.ts", "lib/quran-api.ts"  ]
 }

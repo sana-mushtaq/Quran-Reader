@@ -40,7 +40,7 @@ export default function BookmarksScreen() {
     );
   }
 
-  const renderBookmark = ({ item }: { item: typeof bookmarks[0] }) => (
+  const renderBookmark = ({ item }) => (
     <View style={[styles.bookmarkCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
       <View style={styles.bookmarkHeader}>
         <View style={styles.bookmarkBadge}>

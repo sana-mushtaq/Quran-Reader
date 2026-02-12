@@ -1,69 +1,66 @@
-import { fetch } from "expo/fetch";
-import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { fetch } from "expo/fetch"
+import { QueryClient } from "@tanstack/react-query"
 
-/**
- * Gets the base URL for the Express API server (e.g., "http://localhost:3000")
- * @returns {string} The API base URL
- */
-export function getApiUrl(): string {
-  let host = process.env.EXPO_PUBLIC_DOMAIN;
+// returns base api url using env domain
+// example: https://example.com
+export function getApiUrl() {
+  const host = process.env.EXPO_PUBLIC_DOMAIN
 
+  // fail early if env variable is missing
   if (!host) {
-    throw new Error("EXPO_PUBLIC_DOMAIN is not set");
+    throw new Error("EXPO_PUBLIC_DOMAIN is not set")
   }
 
-  let url = new URL(`https://${host}`);
-
-  return url.href;
+  const url = new URL(`https://${host}`)
+  return url.href
 }
 
-async function throwIfResNotOk(res: Response) {
+// helper to throw useful errors for non-200 responses
+async function throwIfResNotOk(res) {
   if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    const text = (await res.text()) || res.statusText
+    throw new Error(`${res.status}: ${text}`)
   }
 }
 
-export async function apiRequest(
-  method: string,
-  route: string,
-  data?: unknown | undefined,
-): Promise<Response> {
-  const baseUrl = getApiUrl();
-  const url = new URL(route, baseUrl);
+// generic api request helper (POST, PUT, DELETE, etc)
+export async function apiRequest(method, route, data) {
+  const baseUrl = getApiUrl()
+  const url = new URL(route, baseUrl)
 
   const res = await fetch(url.toString(), {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
     body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
-  });
+    credentials: "include"
+  })
 
-  await throwIfResNotOk(res);
-  return res;
+  await throwIfResNotOk(res)
+  return res
 }
 
-type UnauthorizedBehavior = "returnNull" | "throw";
-export const getQueryFn: <T>(options: {
-  on401: UnauthorizedBehavior;
-}) => QueryFunction<T> =
-  ({ on401: unauthorizedBehavior }) =>
+// factory for react-query query function
+// handles 401 behavior in one place
+export const getQueryFn =
+  ({ on401 }) =>
   async ({ queryKey }) => {
-    const baseUrl = getApiUrl();
-    const url = new URL(queryKey.join("/") as string, baseUrl);
+    const baseUrl = getApiUrl()
+    const url = new URL(queryKey.join("/"), baseUrl)
 
     const res = await fetch(url.toString(), {
-      credentials: "include",
-    });
+      credentials: "include"
+    })
 
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
+    // sometimes we want to silently ignore unauthorized
+    if (on401 === "returnNull" && res.status === 401) {
+      return null
     }
 
-    await throwIfResNotOk(res);
-    return await res.json();
-  };
+    await throwIfResNotOk(res)
+    return await res.json()
+  }
 
+// shared query client for the app
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -71,10 +68,10 @@ export const queryClient = new QueryClient({
       refetchInterval: false,
       refetchOnWindowFocus: false,
       staleTime: Infinity,
-      retry: false,
+      retry: false
     },
     mutations: {
-      retry: false,
-    },
-  },
-});
+      retry: false
+    }
+  }
+})

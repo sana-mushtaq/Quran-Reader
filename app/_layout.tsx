@@ -6,7 +6,6 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { useFonts, Inter_400Regular, Inter_600SemiBold } from "@expo-google-fonts/inter";
 import { Amiri_400Regular, Amiri_700Bold } from "@expo-google-fonts/amiri";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { queryClient } from "@/lib/query-client";
 import { QuranProvider } from "@/lib/quran-context";
 import { DownloadProvider } from "@/lib/download-context";
@@ -42,21 +41,19 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <QuranProvider>
-          <DownloadProvider>
-            <GestureHandlerRootView style={{ flex: 1 }}>
-              <KeyboardProvider>
-                <RootLayoutNav />
-                {showSplash ? (
-                  <SplashScreen onFinish={() => setShowSplash(false)} />
-                ) : null}
-              </KeyboardProvider>
-            </GestureHandlerRootView>
-          </DownloadProvider>
-        </QuranProvider>
-      </QueryClientProvider>
-    </ErrorBoundary>
+    <QueryClientProvider client={queryClient}>
+      <QuranProvider>
+        <DownloadProvider>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <KeyboardProvider>
+              <RootLayoutNav />
+              {showSplash ? (
+                <SplashScreen onFinish={() => setShowSplash(false)} />
+              ) : null}
+            </KeyboardProvider>
+          </GestureHandlerRootView>
+        </DownloadProvider>
+      </QuranProvider>
+    </QueryClientProvider>
   );
 }

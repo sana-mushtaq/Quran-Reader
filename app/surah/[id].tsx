@@ -18,21 +18,19 @@ import { fetchSurahArabic, fetchSurahTranslation, AyahEdition, getArabicNumber, 
 import { useQuran, AudioTrack } from "@/lib/quran-context";
 import { useDownload } from "@/lib/download-context";
 
-interface CombinedAyah {
-  number: number;
-  numberInSurah: number;
-  arabicText: string;
-  translationText: string;
-  audio?: string;
-  localAudio?: string;
-}
+//surah detail screen
 
 export default function SurahDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+
+  //get the surah id 
+  const { id } = useLocalSearchParams();
   const colorScheme = useColorScheme();
+
+  //dark
   const isDark = colorScheme === "dark";
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
+  //check if ayah is bookmarked , playing, states
   const {
     isBookmarked, toggleBookmark,
     playQueue, pauseAudio, resumeAudio, stopAudio,
@@ -41,9 +39,11 @@ export default function SurahDetailScreen() {
     currentAyahInSurah, totalTracksInQueue, queueIndex,
   } = useQuran();
   const { surahStatus, downloadSurah } = useDownload();
-  const flatListRef = useRef<FlatList>(null);
 
-  const [ayahs, setAyahs] = useState<CombinedAyah[]>([]);
+  //list for aayah
+  const flatListRef = useRef(null);
+
+  const [ayahs, setAyahs] = useState([]);
   const [surahName, setSurahName] = useState("");
   const [surahArabicName, setSurahArabicName] = useState("");
   const [surahEnglishName, setSurahEnglishName] = useState("");
@@ -64,12 +64,18 @@ export default function SurahDetailScreen() {
       ]);
 
       if (arabicData.length > 0 && arabicData[0].surah) {
+        
         setSurahName(arabicData[0].surah.englishNameTranslation);
         setSurahArabicName(arabicData[0].surah.name);
         setSurahEnglishName(arabicData[0].surah.englishName);
+
+        console.log(surahName)
+        console.log(surahArabicName)
+        console.log(surahEnglishName)
       }
 
-      const combined: CombinedAyah[] = arabicData.map((a, i) => {
+
+      const combined = arabicData.map((a, i) => {
         const localUri = getLocalAudioUri(surahNumber, a.numberInSurah);
         return {
           number: a.number,
@@ -81,6 +87,9 @@ export default function SurahDetailScreen() {
         };
       });
 
+      if(surahNumber!==1) {
+        combined[0].arabicText = combined[0].arabicText.replace("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ","")     
+      }
       setAyahs(combined);
     } catch {
       setError(true);
@@ -96,12 +105,12 @@ export default function SurahDetailScreen() {
     };
   }, [surahNumber]);
 
-  const buildTracks = useCallback((): AudioTrack[] => {
+  const buildTracks = useCallback(() => {
     return ayahs
       .filter((a) => a.localAudio || a.audio)
       .map((a) => ({
         id: `${surahNumber}_${a.numberInSurah}`,
-        uri: a.localAudio || a.audio!,
+        uri: a.localAudio || a.audio,
         ayahNumberInSurah: a.numberInSurah,
       }));
   }, [ayahs, surahNumber]);
@@ -114,7 +123,7 @@ export default function SurahDetailScreen() {
     }
   }, [buildTracks, playQueue]);
 
-  const handlePlayFromHere = useCallback(async (ayah: CombinedAyah) => {
+  const handlePlayFromHere = useCallback(async (ayah) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const tracks = buildTracks();
     const startIdx = tracks.findIndex((t) => t.ayahNumberInSurah === ayah.numberInSurah);
@@ -126,6 +135,7 @@ export default function SurahDetailScreen() {
   const handlePauseResume = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (isPlaying) {
+      isThisSurahPlaying = false
       await pauseAudio();
     } else {
       await resumeAudio();
@@ -133,7 +143,8 @@ export default function SurahDetailScreen() {
   }, [isPlaying, pauseAudio, resumeAudio]);
 
   const handleBookmark = useCallback(
-    (ayah: CombinedAyah) => {
+    (ayah) => {
+      console.log(surahEnglishName)
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       toggleBookmark({
         ayahNumber: ayah.number,
@@ -144,6 +155,7 @@ export default function SurahDetailScreen() {
         translationText: ayah.translationText,
         numberInSurah: ayah.numberInSurah,
       });
+      console.log(ayah)
     },
     [surahNumber, surahArabicName, surahEnglishName, toggleBookmark]
   );
@@ -155,12 +167,12 @@ export default function SurahDetailScreen() {
   }, [surahNumber, downloadSurah]);
 
   const isQueueActive = totalTracksInQueue > 1 || (totalTracksInQueue === 1 && currentTrackId !== null);
-  const isThisSurahPlaying = currentTrackId?.startsWith(`${surahNumber}_`) ?? false;
+  let isThisSurahPlaying = currentTrackId?.startsWith(`${surahNumber}_`) ?? false;
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
 
-  const renderAyah = ({ item }: { item: CombinedAyah }) => {
+  const renderAyah = ({ item }) => {
     const trackId = `${surahNumber}_${item.numberInSurah}`;
     const isThisPlaying = currentTrackId === trackId && isPlaying;
     const isThisLoading = currentTrackId === trackId && isLoading;
@@ -207,7 +219,7 @@ export default function SurahDetailScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.topBar, { paddingTop: insets.top + webTopInset + 8 }]}>
+      <View style={[styles.topBar, { paddingTop: insets.top  + 20 }]}>
         <Pressable
           onPress={() => { stopAudio(); router.back(); }}
           hitSlop={12}
@@ -251,7 +263,7 @@ export default function SurahDetailScreen() {
         contentContainerStyle={{
           paddingBottom: isThisSurahPlaying ? 160 : 100,
           paddingHorizontal: 16,
-          paddingTop: 8,
+          paddingTop: 0,
         }}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
@@ -276,15 +288,15 @@ export default function SurahDetailScreen() {
               ]}
             >
               <Ionicons
-                name={isThisSurahPlaying ? "pause" : "play"}
+                name={isPlaying ? "pause" : "play"}
                 size={18}
-                color={isThisSurahPlaying ? theme.tint : "#fff"}
+                color={isPlaying ? theme.tint : "#fff"}
               />
               <Text style={[
                 styles.playAllText,
-                { color: isThisSurahPlaying ? theme.tint : "#fff" },
+                { color: isPlaying ? theme.tint : "#fff" },
               ]}>
-                {isThisSurahPlaying ? "Pause" : "Play from Start"}
+                {isPlaying ? "Pause" : "Play from Start"}
               </Text>
             </Pressable>
           </View>
@@ -343,15 +355,6 @@ function AyahCard({
   isCurrentLoading,
   onPlayFromHere,
   onBookmark,
-}: {
-  ayah: CombinedAyah;
-  theme: typeof Colors.light;
-  isDark: boolean;
-  isBookmarked: boolean;
-  isCurrentPlaying: boolean;
-  isCurrentLoading: boolean;
-  onPlayFromHere: (ayah: CombinedAyah) => void;
-  onBookmark: (ayah: CombinedAyah) => void;
 }) {
   const hasAudio = !!(ayah.localAudio || ayah.audio);
 
@@ -446,7 +449,7 @@ const styles = StyleSheet.create({
   },
   bismillah: {
     alignItems: "center",
-    paddingVertical: 24,
+    paddingVertical: 15,
   },
   bismillahText: {
     fontSize: 26,

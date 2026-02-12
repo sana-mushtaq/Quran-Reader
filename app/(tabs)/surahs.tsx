@@ -25,7 +25,7 @@ export default function SurahsScreen() {
   const { surahStatus, isDownloadingAll, downloadProgress, downloadAllContent, cancelDownload, totalDownloaded } =
     useDownload();
 
-  const [surahs, setSurahs] = useState<Surah[]>([]);
+  const [surahs, setSurahs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -66,7 +66,7 @@ export default function SurahsScreen() {
     }
   };
 
-  const renderSurah = ({ item }: { item: Surah }) => {
+  const renderSurah = ({ item }) => {
     const status = surahStatus[item.number];
     return (
       <Pressable
@@ -175,7 +175,7 @@ export default function SurahsScreen() {
                       <View
                         style={[
                           styles.progressBarFill,
-                          { backgroundColor: theme.tint, width: `${downloadProgress.overallPercent}%` as any },
+                          { backgroundColor: theme.tint, width: `${downloadProgress.overallPercent}%` },
                         ]}
                       />
                     </View>
@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: 1,
-    marginLeft: 74,
+    marginLeft: 0,
   },
   errorText: {
     fontSize: 15,

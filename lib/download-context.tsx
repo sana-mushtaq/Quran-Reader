@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode, useRef } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Platform } from "react-native";
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from "react"
+import AsyncStorage from "@react-native-async-storage/async-storage"
+import { Platform } from "react-native"
 import {
   cacheSurahsList,
   cacheSurahArabic,
@@ -12,125 +12,108 @@ import {
   deleteSurahAudio,
   deleteAllAudio,
   setAllDataCached,
-} from "./offline-storage";
-import { fetchSurahs, fetchSurahArabic, fetchSurahTranslation, Surah } from "./quran-api";
+} from "./offline-storage"
+import { fetchSurahs, fetchSurahArabic, fetchSurahTranslation } from "./quran-api"
 
-const DOWNLOAD_STATUS_KEY = "@quran_download_status";
+const DOWNLOAD_STATUS_KEY = "@quran_download_status"
 
-export type SurahDownloadStatus = "none" | "downloading" | "downloaded" | "error";
+// create context for download manager
+const DownloadContext = createContext(null)
 
-interface DownloadProgress {
-  currentSurah: number;
-  currentAyah: number;
-  totalAyahs: number;
-  totalSurahs: number;
-  completedSurahs: number;
-  overallPercent: number;
-}
+export function DownloadProvider({ children }) {
+  const [surahStatus, setSurahStatus] = useState({})
+  const [isDownloadingAll, setIsDownloadingAll] = useState(false)
+  const [downloadProgress, setDownloadProgress] = useState(null)
+  const [initComplete, setInitComplete] = useState(false)
+  const cancelRef = useRef(false)
 
-interface DownloadContextValue {
-  surahStatus: Record<number, SurahDownloadStatus>;
-  isDownloadingAll: boolean;
-  downloadProgress: DownloadProgress | null;
-  downloadAllContent: () => Promise<void>;
-  downloadSurah: (surahNumber: number) => Promise<void>;
-  cancelDownload: () => void;
-  removeSurahDownload: (surahNumber: number, totalAyahs: number) => Promise<void>;
-  removeAllDownloads: () => Promise<void>;
-  totalDownloaded: number;
-  initComplete: boolean;
-}
-
-const DownloadContext = createContext<DownloadContextValue | null>(null);
-
-export function DownloadProvider({ children }: { children: ReactNode }) {
-  const [surahStatus, setSurahStatus] = useState<Record<number, SurahDownloadStatus>>({});
-  const [isDownloadingAll, setIsDownloadingAll] = useState(false);
-  const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null);
-  const [initComplete, setInitComplete] = useState(false);
-  const cancelRef = useRef(false);
-
+  // on mount, load saved download status
   useEffect(() => {
-    loadSavedStatus();
-  }, []);
+    loadSavedStatus()
+  }, [])
 
+  // load saved download status from storage
   const loadSavedStatus = async () => {
     try {
-      const saved = await AsyncStorage.getItem(DOWNLOAD_STATUS_KEY);
+      const saved = await AsyncStorage.getItem(DOWNLOAD_STATUS_KEY)
       if (saved) {
-        const parsed = JSON.parse(saved);
-        setSurahStatus(parsed);
+        setSurahStatus(JSON.parse(saved))
       }
     } catch {}
-    setInitComplete(true);
-  };
+    setInitComplete(true)
+  }
 
-  const saveStatus = async (status: Record<number, SurahDownloadStatus>) => {
+  // save current download status to storage
+  const saveStatus = async (status) => {
     try {
-      await AsyncStorage.setItem(DOWNLOAD_STATUS_KEY, JSON.stringify(status));
+      await AsyncStorage.setItem(DOWNLOAD_STATUS_KEY, JSON.stringify(status))
     } catch {}
-  };
+  }
 
-  const updateSurahStatus = useCallback((surahNumber: number, status: SurahDownloadStatus) => {
+  // update status of a single surah
+  const updateSurahStatus = useCallback((surahNumber, status) => {
     setSurahStatus((prev) => {
-      const next = { ...prev, [surahNumber]: status };
-      saveStatus(next);
-      return next;
-    });
-  }, []);
+      const next = { ...prev, [surahNumber]: status }
+      saveStatus(next)
+      return next
+    })
+  }, [])
 
-  const downloadSurah = useCallback(async (surahNumber: number) => {
-    if (Platform.OS === "web") return;
+  // download a single surah
+  const downloadSurah = useCallback(async (surahNumber) => {
+    if (Platform.OS === "web") return
 
-    updateSurahStatus(surahNumber, "downloading");
+    updateSurahStatus(surahNumber, "downloading")
     try {
-      await ensureAudioDir();
+      await ensureAudioDir()
+      const arabicData = await fetchSurahArabic(surahNumber)
+      const translationData = await fetchSurahTranslation(surahNumber)
 
-      let arabicData = await fetchSurahArabic(surahNumber);
-      let translationData = await fetchSurahTranslation(surahNumber);
+      await cacheSurahArabic(surahNumber, arabicData)
+      await cacheSurahTranslation(surahNumber, translationData)
 
-      await cacheSurahArabic(surahNumber, arabicData);
-      await cacheSurahTranslation(surahNumber, translationData);
-
+      // download audio for each ayah
       for (let i = 0; i < arabicData.length; i++) {
-        const ayah = arabicData[i];
+        const ayah = arabicData[i]
         if (ayah.audio) {
-          await downloadAyahAudio(surahNumber, ayah.numberInSurah, ayah.audio);
+          await downloadAyahAudio(surahNumber, ayah.numberInSurah, ayah.audio)
         }
       }
 
-      updateSurahStatus(surahNumber, "downloaded");
+      updateSurahStatus(surahNumber, "downloaded")
     } catch {
-      updateSurahStatus(surahNumber, "error");
+      updateSurahStatus(surahNumber, "error")
     }
-  }, [updateSurahStatus]);
+  }, [updateSurahStatus])
 
+  // download all surahs with progress tracking
   const downloadAllContent = useCallback(async () => {
-    if (Platform.OS === "web") return;
+    if (Platform.OS === "web") return
 
-    cancelRef.current = false;
-    setIsDownloadingAll(true);
+    cancelRef.current = false
+    setIsDownloadingAll(true)
 
     try {
-      await ensureAudioDir();
-      const surahs = await fetchSurahs();
-      await cacheSurahsList(surahs);
+      await ensureAudioDir()
+      const surahs = await fetchSurahs()
+      await cacheSurahsList(surahs)
 
-      const totalSurahs = surahs.length;
-      let completedSurahs = 0;
+      const totalSurahs = surahs.length
+      let completedSurahs = 0
 
       for (let s = 0; s < surahs.length; s++) {
-        if (cancelRef.current) break;
+        if (cancelRef.current) break
 
-        const surah = surahs[s];
-        const surahNum = surah.number;
+        const surah = surahs[s]
+        const surahNum = surah.number
 
-        const alreadyCached = surahStatus[surahNum] === "downloaded";
+        // skip if already downloaded and cached
+        const alreadyCached = surahStatus[surahNum] === "downloaded"
         if (alreadyCached) {
-          const textCached = await isSurahTextCached(surahNum);
-          const audioCached = isSurahAudioDownloaded(surahNum, surah.numberOfAyahs);
+          const textCached = await isSurahTextCached(surahNum)
+          const audioCached = isSurahAudioDownloaded(surahNum, surah.numberOfAyahs)
           if (textCached && audioCached) {
-            completedSurahs++;
+            completedSurahs++
             setDownloadProgress({
               currentSurah: surahNum,
               currentAyah: 0,
@@ -138,30 +121,30 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
               totalSurahs,
               completedSurahs,
               overallPercent: Math.round((completedSurahs / totalSurahs) * 100),
-            });
-            continue;
+            })
+            continue
           }
         }
 
-        updateSurahStatus(surahNum, "downloading");
+        updateSurahStatus(surahNum, "downloading")
 
         try {
           const [arabicData, translationData] = await Promise.all([
             fetchSurahArabic(surahNum),
             fetchSurahTranslation(surahNum),
-          ]);
+          ])
 
-          await cacheSurahArabic(surahNum, arabicData);
-          await cacheSurahTranslation(surahNum, translationData);
+          await cacheSurahArabic(surahNum, arabicData)
+          await cacheSurahTranslation(surahNum, translationData)
 
           for (let a = 0; a < arabicData.length; a++) {
-            if (cancelRef.current) break;
-
-            const ayah = arabicData[a];
+            if (cancelRef.current) break
+            const ayah = arabicData[a]
             if (ayah.audio) {
-              await downloadAyahAudio(surahNum, ayah.numberInSurah, ayah.audio);
+              await downloadAyahAudio(surahNum, ayah.numberInSurah, ayah.audio)
             }
 
+            // update progress
             setDownloadProgress({
               currentSurah: surahNum,
               currentAyah: a + 1,
@@ -171,48 +154,52 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
               overallPercent: Math.round(
                 ((completedSurahs + (a + 1) / arabicData.length) / totalSurahs) * 100
               ),
-            });
+            })
           }
 
           if (!cancelRef.current) {
-            updateSurahStatus(surahNum, "downloaded");
-            completedSurahs++;
+            updateSurahStatus(surahNum, "downloaded")
+            completedSurahs++
           }
         } catch {
-          updateSurahStatus(surahNum, "error");
-          completedSurahs++;
+          updateSurahStatus(surahNum, "error")
+          completedSurahs++
         }
       }
 
       if (!cancelRef.current) {
-        await setAllDataCached(true);
+        await setAllDataCached(true)
       }
     } catch {}
 
-    setIsDownloadingAll(false);
-    setDownloadProgress(null);
-  }, [surahStatus, updateSurahStatus]);
+    setIsDownloadingAll(false)
+    setDownloadProgress(null)
+  }, [surahStatus, updateSurahStatus])
 
+  // cancel any ongoing downloads
   const cancelDownload = useCallback(() => {
-    cancelRef.current = true;
-  }, []);
+    cancelRef.current = true
+  }, [])
 
-  const removeSurahDownload = useCallback(async (surahNumber: number, totalAyahs: number) => {
-    deleteSurahAudio(surahNumber, totalAyahs);
-    updateSurahStatus(surahNumber, "none");
-  }, [updateSurahStatus]);
+  // remove a single surah's download
+  const removeSurahDownload = useCallback(async (surahNumber, totalAyahs) => {
+    deleteSurahAudio(surahNumber, totalAyahs)
+    updateSurahStatus(surahNumber, "none")
+  }, [updateSurahStatus])
 
+  // remove all downloads and reset
   const removeAllDownloads = useCallback(async () => {
-    deleteAllAudio();
-    await setAllDataCached(false);
-    setSurahStatus({});
-    await AsyncStorage.removeItem(DOWNLOAD_STATUS_KEY);
-  }, []);
+    deleteAllAudio()
+    await setAllDataCached(false)
+    setSurahStatus({})
+    await AsyncStorage.removeItem(DOWNLOAD_STATUS_KEY)
+  }, [])
 
+  // count total downloaded surahs
   const totalDownloaded = useMemo(
     () => Object.values(surahStatus).filter((s) => s === "downloaded").length,
     [surahStatus]
-  );
+  )
 
   const value = useMemo(
     () => ({
@@ -239,13 +226,13 @@ export function DownloadProvider({ children }: { children: ReactNode }) {
       totalDownloaded,
       initComplete,
     ]
-  );
+  )
 
-  return <DownloadContext.Provider value={value}>{children}</DownloadContext.Provider>;
+  return <DownloadContext.Provider value={value}>{children}</DownloadContext.Provider>
 }
 
 export function useDownload() {
-  const ctx = useContext(DownloadContext);
-  if (!ctx) throw new Error("useDownload must be used within DownloadProvider");
-  return ctx;
+  const ctx = useContext(DownloadContext)
+  if (!ctx) throw new Error("useDownload must be used within DownloadProvider")
+  return ctx
 }

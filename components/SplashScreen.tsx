@@ -1,79 +1,63 @@
-import React, { useEffect } from "react";
-import { StyleSheet, Text, View, Image, Dimensions } from "react-native";
+import React, { useEffect } from "react"
+import { StyleSheet, Text, View, ImageBackground, Dimensions, Image } from "react-native"
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   withDelay,
-  withSequence,
   Easing,
-} from "react-native-reanimated";
-import { LinearGradient } from "expo-linear-gradient";
+} from "react-native-reanimated"
 
-const { width } = Dimensions.get("window");
+const { width, height } = Dimensions.get("window")
 
-interface SplashScreenProps {
-  onFinish: () => void;
-}
-
-export default function SplashScreen({ onFinish }: SplashScreenProps) {
-  const iconOpacity = useSharedValue(0);
-  const iconScale = useSharedValue(0.6);
-  const titleOpacity = useSharedValue(0);
-  const titleTranslateY = useSharedValue(20);
-  const containerOpacity = useSharedValue(1);
+export default function SplashScreen({ onFinish }) {
+  
+  const titleOpacity = useSharedValue(0)
+  const titleTranslateY = useSharedValue(20)
+  const containerOpacity = useSharedValue(1)
 
   useEffect(() => {
-    iconOpacity.value = withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) });
-    iconScale.value = withTiming(1, { duration: 700, easing: Easing.out(Easing.back(1.2)) });
-
-    titleOpacity.value = withDelay(400, withTiming(1, { duration: 500 }));
-    titleTranslateY.value = withDelay(400, withTiming(0, { duration: 500, easing: Easing.out(Easing.cubic) }));
+    titleOpacity.value = withDelay(400, withTiming(1, { duration: 500 }))
+    titleTranslateY.value = withDelay(400, withTiming(0, { duration: 500, easing: Easing.out(Easing.cubic) }))
 
     const timer = setTimeout(() => {
-      containerOpacity.value = withTiming(0, { duration: 400 }, () => {});
-      setTimeout(onFinish, 400);
-    }, 2200);
+      containerOpacity.value = withTiming(0, { duration: 400 }, () => {})
+      setTimeout(onFinish, 400)
+    }, 100000000)
 
-    return () => clearTimeout(timer);
-  }, []);
-
-  const iconStyle = useAnimatedStyle(() => ({
-    opacity: iconOpacity.value,
-    transform: [{ scale: iconScale.value }],
-  }));
+    return () => clearTimeout(timer)
+  }, [])
 
   const titleStyle = useAnimatedStyle(() => ({
     opacity: titleOpacity.value,
     transform: [{ translateY: titleTranslateY.value }],
-  }));
+  }))
 
   const containerStyle = useAnimatedStyle(() => ({
     opacity: containerOpacity.value,
-  }));
+  }))
+return (
+  <Animated.View style={[styles.wrapper, containerStyle]}>
+    <ImageBackground
+      source={require("../assets/images/bg.png")}
+      style={styles.container}
+      resizeMode="cover"
+    >
+      {/* Soft color overlay */}
+      <View style={styles.overlay} />
 
-  return (
-    <Animated.View style={[styles.wrapper, containerStyle]}>
-      <LinearGradient
-        colors={["#0A1A17", "#0D5C4D", "#0A1A17"]}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={styles.container}
-      >
-        <Animated.View style={[styles.iconContainer, iconStyle]}>
-          <Image
-            source={require("@/assets/images/icon.png")}
-            style={styles.icon}
-            resizeMode="contain"
-          />
-        </Animated.View>
+      {/* Center Image */}
+      <View style={styles.centerImageWrapper}>
+        <Image
+          source={require("../assets/images/quran-text.svg")}
+          style={styles.centerImage}
+          resizeMode="contain"
+        />
+      </View>
+    </ImageBackground>
+  </Animated.View>
+)
 
-        <Animated.View style={[styles.titleContainer, titleStyle]}>
-          <Text style={styles.arabicTitle}>القرآن الكريم</Text>
-        </Animated.View>
-      </LinearGradient>
-    </Animated.View>
-  );
 }
 
 const styles = StyleSheet.create({
@@ -82,17 +66,10 @@ const styles = StyleSheet.create({
     zIndex: 999,
   },
   container: {
-    flex: 1,
+    width: "100%",
+    height: "100%", // ensures full screen
     justifyContent: "center",
     alignItems: "center",
-  },
-  iconContainer: {
-    marginBottom: 28,
-  },
-  icon: {
-    width: 120,
-    height: 120,
-    borderRadius: 28,
   },
   titleContainer: {
     alignItems: "center",
@@ -103,4 +80,25 @@ const styles = StyleSheet.create({
     fontFamily: "Amiri_700Bold",
     letterSpacing: 2,
   },
-});
+   // Wrapper keeps the image perfectly centered
+  centerImageWrapper: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    transform: [
+      { translateX: -75 },
+      { translateY: -75 }
+    ]
+  },
+
+  // Adjust size as needed
+  centerImage: {
+    width: 150,
+    height: 150
+  },
+  overlay: {
+  ...StyleSheet.absoluteFillObject,
+  backgroundColor: "rgba(10, 26, 23, 0.5)" // dark green tint
+}
+
+})

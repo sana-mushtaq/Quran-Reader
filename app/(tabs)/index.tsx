@@ -34,6 +34,7 @@ export default function HomeScreen() {
     setError(false);
     try {
       const data = await fetchRandomAyah();
+      console.log(data)
       setDailyArabic(data.arabic);
       setDailyTranslation(data.translation);
     } catch {
@@ -49,6 +50,13 @@ export default function HomeScreen() {
 
   const today = new Date();
   const dateStr = today.toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+    const dateStrAr = today.toLocaleDateString("ar-SA", {
     weekday: "long",
     year: "numeric",
     month: "long",
@@ -75,7 +83,7 @@ export default function HomeScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     toggleBookmark({
       ayahNumber: dailyArabic.number,
-      surahNumber: dailyArabic.surah?.number || 0,
+      surahNumber: dailyArabic.surah?.number || 1,
       surahName: dailyArabic.surah?.name || "",
       surahEnglishName: dailyArabic.surah?.englishName || "",
       arabicText: dailyArabic.text,
@@ -93,7 +101,13 @@ export default function HomeScreen() {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.header}>
-        <Text style={[styles.dateText, { color: theme.textSecondary }]}>{dateStr}</Text>
+
+        <Text style={[styles.dateText, { color: theme.textSecondary }]}>
+          {dateStr} {' '} {dateStrAr}
+        </Text>
+         <Text style={[styles.greeting, { color: theme.text, fontFamily: "Inter_600SemiBold" }]}>
+         Assalam o Alaikum
+        </Text>
         <Text style={[styles.greeting, { color: theme.text, fontFamily: "Inter_600SemiBold" }]}>
           Verse of the Day
         </Text>
@@ -164,7 +178,7 @@ export default function HomeScreen() {
             <Text style={styles.translationDaily}>{dailyTranslation.text}</Text>
 
             <Text style={styles.surahRef}>
-              Surah {dailyArabic.surah?.englishName} ({dailyArabic.surah?.englishNameTranslation}) - Ayah{" "}
+              Surah {dailyArabic.surah?.englishName} - Ayah{" "}
               {dailyArabic.numberInSurah}
             </Text>
           </LinearGradient>
@@ -205,11 +219,6 @@ function InfoRow({
   label,
   value,
   theme,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  value: string;
-  theme: typeof Colors.light;
 }) {
   return (
     <View style={styles.infoRow}>

@@ -41,7 +41,7 @@ function ClassicTabLayout() {
         tabBarActiveTintColor: theme.tint,
         tabBarInactiveTintColor: theme.tabIconDefault,
         tabBarStyle: {
-          position: "absolute" as const,
+          position: "absolute",
           backgroundColor: isIOS ? "transparent" : isDark ? "#0A1A17" : "#FDF8F0",
           borderTopWidth: isWeb ? 1 : 0,
           borderTopColor: theme.border,

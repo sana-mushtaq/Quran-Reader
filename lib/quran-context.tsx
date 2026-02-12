@@ -2,63 +2,35 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Audio } from "expo-av";
 
-interface BookmarkedAyah {
-  ayahNumber: number;
-  surahNumber: number;
-  surahName: string;
-  surahEnglishName: string;
-  arabicText: string;
-  translationText: string;
-  numberInSurah: number;
-}
-
-export interface AudioTrack {
-  id: string;
-  uri: string;
-  ayahNumberInSurah: number;
-}
-
-interface QuranContextValue {
-  bookmarks: BookmarkedAyah[];
-  isBookmarked: (ayahNumber: number) => boolean;
-  toggleBookmark: (ayah: BookmarkedAyah) => void;
-  currentTrackId: string | null;
-  isPlaying: boolean;
-  isLoading: boolean;
-  playQueue: (tracks: AudioTrack[], startIndex: number) => Promise<void>;
-  playSingle: (uri: string) => Promise<void>;
-  pauseAudio: () => Promise<void>;
-  resumeAudio: () => Promise<void>;
-  stopAudio: () => Promise<void>;
-  skipNext: () => Promise<void>;
-  skipPrev: () => Promise<void>;
-  currentAyahInSurah: number | null;
-  totalTracksInQueue: number;
-  queueIndex: number;
-}
-
-const QuranContext = createContext<QuranContextValue | null>(null);
+const QuranContext = createContext(null);
 
 const BOOKMARKS_KEY = "@quran_bookmarks";
 
-export function QuranProvider({ children }: { children: ReactNode }) {
-  const [bookmarks, setBookmarks] = useState<BookmarkedAyah[]>([]);
-  const [currentTrackId, setCurrentTrackId] = useState<string | null>(null);
+export function QuranProvider({ children }) {
+
+  //bookmarks
+  const [bookmarks, setBookmarks] = useState([]);
+
+  //current audio playing
+  const [currentTrackId, setCurrentTrackId] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [currentAyahInSurah, setCurrentAyahInSurah] = useState<number | null>(null);
+  const [currentAyahInSurah, setCurrentAyahInSurah] = useState(null);
 
-  const queueRef = useRef<AudioTrack[]>([]);
+  ///next in queue
+  const queueRef = useRef([]);
   const queueIndexRef = useRef(0);
   const [queueIndex, setQueueIndex] = useState(0);
   const [totalTracksInQueue, setTotalTracksInQueue] = useState(0);
 
-  const soundRef = useRef<Audio.Sound | null>(null);
-  const nextSoundRef = useRef<Audio.Sound | null>(null);
-  const nextIndexRef = useRef<number | null>(null);
+  //sounds
+  const soundRef = useRef(null);
+  const nextSoundRef = useRef(null);
+  const nextIndexRef = useRef(null);
   const isTransitioningRef = useRef(false);
 
   useEffect(() => {
+    //load bookmarks
     loadBookmarks();
     Audio.setAudioModeAsync({
       playsInSilentModeIOS: true,
@@ -73,23 +45,33 @@ export function QuranProvider({ children }: { children: ReactNode }) {
   const loadBookmarks = async () => {
     try {
       const stored = await AsyncStorage.getItem(BOOKMARKS_KEY);
-      if (stored) setBookmarks(JSON.parse(stored));
-    } catch {}
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        // Only set state if the parsed data is actually an array
+        setBookmarks(Array.isArray(parsed) ? parsed : []);
+      }
+    } catch (e) {
+      setBookmarks([]);
+    }
   };
 
-  const saveBookmarks = async (newBookmarks: BookmarkedAyah[]) => {
+  const saveBookmarks = async (newBookmarks) => {
     try {
+      //store ayah into array of book marks
       await AsyncStorage.setItem(BOOKMARKS_KEY, JSON.stringify(newBookmarks));
-    } catch {}
+    } catch { }
   };
 
   const isBookmarked = useCallback(
-    (ayahNumber: number) => bookmarks.some((b) => b.ayahNumber === ayahNumber),
+    (ayahNumber) => {
+      // Ensure bookmarks is always treated as an array before using .some()
+      const safeBookmarks = Array.isArray(bookmarks) ? bookmarks : [];
+      return safeBookmarks.some((b) => b.ayahNumber === ayahNumber);
+    },
     [bookmarks]
   );
-
   const toggleBookmark = useCallback(
-    (ayah: BookmarkedAyah) => {
+    (ayah) => {
       setBookmarks((prev) => {
         const exists = prev.some((b) => b.ayahNumber === ayah.ayahNumber);
         const next = exists
@@ -102,7 +84,8 @@ export function QuranProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  const preloadNext = useCallback(async (afterIndex: number) => {
+  //alraedy load the next audio
+  const preloadNext = useCallback(async (afterIndex) => {
     const queue = queueRef.current;
     const nextIdx = afterIndex + 1;
     if (nextIdx >= queue.length) {
@@ -135,9 +118,10 @@ export function QuranProvider({ children }: { children: ReactNode }) {
       } else {
         await preloaded.unloadAsync();
       }
-    } catch {}
+    } catch { }
   }, []);
 
+  //go to next audio
   const advanceToNext = useCallback(async () => {
     if (isTransitioningRef.current) return;
     isTransitioningRef.current = true;
@@ -233,7 +217,7 @@ export function QuranProvider({ children }: { children: ReactNode }) {
     }
   }, [preloadNext]);
 
-  const playTrackAtIndex = useCallback(async (index: number) => {
+  const playTrackAtIndex = useCallback(async (index) => {
     const queue = queueRef.current;
     if (index < 0 || index >= queue.length) {
       setIsPlaying(false);
@@ -287,7 +271,7 @@ export function QuranProvider({ children }: { children: ReactNode }) {
     }
   }, [advanceToNext, preloadNext]);
 
-  const playQueue = useCallback(async (tracks: AudioTrack[], startIndex: number) => {
+  const playQueue = useCallback(async (tracks, startIndex) => {
     if (soundRef.current) {
       soundRef.current.setOnPlaybackStatusUpdate(null);
       await soundRef.current.unloadAsync();
@@ -304,8 +288,8 @@ export function QuranProvider({ children }: { children: ReactNode }) {
     await playTrackAtIndex(startIndex);
   }, [playTrackAtIndex]);
 
-  const playSingle = useCallback(async (uri: string) => {
-    const singleTrack: AudioTrack = { id: uri, uri, ayahNumberInSurah: 0 };
+  const playSingle = useCallback(async (uri) => {
+    const singleTrack = { id: uri, uri, ayahNumberInSurah: 0 };
     queueRef.current = [singleTrack];
     setTotalTracksInQueue(1);
     await playTrackAtIndex(0);

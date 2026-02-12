@@ -10,45 +10,16 @@ import {
 } from "./offline-storage";
 import { Platform } from "react-native";
 
-export interface Surah {
-  number: number;
-  name: string;
-  englishName: string;
-  englishNameTranslation: string;
-  numberOfAyahs: number;
-  revelationType: string;
-}
-
-export interface Ayah {
-  number: number;
-  text: string;
-  numberInSurah: number;
-  juz: number;
-  page: number;
-  hizbQuarter: number;
-}
-
-export interface AyahEdition {
-  number: number;
-  text: string;
-  numberInSurah: number;
-  audio?: string;
-  surah?: {
-    number: number;
-    name: string;
-    englishName: string;
-    englishNameTranslation: string;
-    numberOfAyahs: number;
-    revelationType: string;
-  };
-}
-
+//base api when the app is loaded first time it will fetch from there
 const BASE_URL = "https://api.alquran.cloud/v1";
 
-export async function fetchSurahs(): Promise<Surah[]> {
+//fetch all surahs
+export async function fetchSurahs() {
+  //if there are surah in cache fetch from thre
   const cached = await getCachedSurahsList();
   if (cached) return cached;
 
+  //else go to the url
   const res = await fetch(`${BASE_URL}/surah`);
   const json = await res.json();
   if (json.code === 200) {
@@ -58,10 +29,13 @@ export async function fetchSurahs(): Promise<Surah[]> {
   throw new Error("Failed to fetch surahs");
 }
 
-export async function fetchSurahArabic(surahNumber: number): Promise<AyahEdition[]> {
+//fetch surah audio
+export async function fetchSurahArabic(surahNumber) {
+  //if there are surah in cache fetch from thre
   const cached = await getCachedSurahArabic(surahNumber);
   if (cached) return cached;
-
+  
+  //else go to the url
   const res = await fetch(`${BASE_URL}/surah/${surahNumber}/ar.alafasy`);
   const json = await res.json();
   if (json.code === 200) {
@@ -71,10 +45,14 @@ export async function fetchSurahArabic(surahNumber: number): Promise<AyahEdition
   throw new Error("Failed to fetch surah arabic");
 }
 
-export async function fetchSurahTranslation(surahNumber: number): Promise<AyahEdition[]> {
+///fetch surah translation
+export async function fetchSurahTranslation(surahNumber) {
+
+  //if there are surah in cache fetch from thre
   const cached = await getCachedSurahTranslation(surahNumber);
   if (cached) return cached;
-
+  
+  //else go to the url
   const res = await fetch(`${BASE_URL}/surah/${surahNumber}/en.asad`);
   const json = await res.json();
   if (json.code === 200) {
@@ -84,10 +62,8 @@ export async function fetchSurahTranslation(surahNumber: number): Promise<AyahEd
   throw new Error("Failed to fetch surah translation");
 }
 
-export async function fetchRandomAyah(): Promise<{
-  arabic: AyahEdition;
-  translation: AyahEdition;
-}> {
+//fetch random ayah for ayan calendar
+export async function fetchRandomAyah() {
   const today = new Date();
   const dayOfYear = Math.floor(
     (today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86400000
@@ -114,16 +90,14 @@ export async function fetchRandomAyah(): Promise<{
   throw new Error("Failed to fetch daily ayah");
 }
 
-async function getDailyVerseFromCache(globalAyahNumber: number): Promise<{
-  arabic: AyahEdition;
-  translation: AyahEdition;
-} | null> {
+//if there is a surah in cache go there
+async function getDailyVerseFromCache(globalAyahNumber){
   try {
     const surahs = await getCachedSurahsList();
     if (!surahs) return null;
 
     let cumulative = 0;
-    let targetSurah: Surah | null = null;
+    let targetSurah = null;
     let numberInSurah = 0;
 
     for (const surah of surahs) {
@@ -152,11 +126,11 @@ async function getDailyVerseFromCache(globalAyahNumber: number): Promise<{
     return null;
   }
 }
-
+//get audio uri
 export function getLocalAudioUri(
-  surahNumber: number,
-  ayahNumberInSurah: number
-): string | null {
+  surahNumber,
+  ayahNumberInSurah
+){
   if (Platform.OS === "web") return null;
   const downloaded = isAudioDownloaded(surahNumber, ayahNumberInSurah);
   if (downloaded) {
@@ -165,7 +139,8 @@ export function getLocalAudioUri(
   return null;
 }
 
-export function getArabicNumber(num: number): string {
+//get arabic number of the surah
+export function getArabicNumber(num) {
   const arabicDigits = ["\u0660", "\u0661", "\u0662", "\u0663", "\u0664", "\u0665", "\u0666", "\u0667", "\u0668", "\u0669"];
   return num
     .toString()
