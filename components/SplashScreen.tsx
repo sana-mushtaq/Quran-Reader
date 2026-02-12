@@ -23,7 +23,7 @@ export default function SplashScreen({ onFinish }) {
     const timer = setTimeout(() => {
       containerOpacity.value = withTiming(0, { duration: 400 }, () => {})
       setTimeout(onFinish, 400)
-    }, 100000000)
+    }, 2200)
 
     return () => clearTimeout(timer)
   }, [])
@@ -39,21 +39,10 @@ export default function SplashScreen({ onFinish }) {
 return (
   <Animated.View style={[styles.wrapper, containerStyle]}>
     <ImageBackground
-      source={require("../assets/images/bg.png")}
+      source={require("../assets/images/splash-screen.png")}
       style={styles.container}
       resizeMode="cover"
     >
-      {/* Soft color overlay */}
-      <View style={styles.overlay} />
-
-      {/* Center Image */}
-      <View style={styles.centerImageWrapper}>
-        <Image
-          source={require("../assets/images/quran-text.svg")}
-          style={styles.centerImage}
-          resizeMode="contain"
-        />
-      </View>
     </ImageBackground>
   </Animated.View>
 )
