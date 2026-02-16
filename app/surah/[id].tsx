@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { fetchSurahArabic, fetchSurahTranslation, AyahEdition, getArabicNumber, getLocalAudioUri } from "@/lib/quran-api";
+import { fetchSurahArabic, fetchSurahTranslation, fetchSurahs, AyahEdition, getArabicNumber, getLocalAudioUri } from "@/lib/quran-api";
 import { useQuran, AudioTrack } from "@/lib/quran-context";
 import { useDownload } from "@/lib/download-context";
 
@@ -64,14 +64,17 @@ export default function SurahDetailScreen() {
       ]);
 
       if (arabicData.length > 0 && arabicData[0].surah) {
-        
         setSurahName(arabicData[0].surah.englishNameTranslation);
         setSurahArabicName(arabicData[0].surah.name);
         setSurahEnglishName(arabicData[0].surah.englishName);
-
-        console.log(surahName)
-        console.log(surahArabicName)
-        console.log(surahEnglishName)
+      } else {
+        const surahs = await fetchSurahs();
+        const surahInfo = surahs.find((s) => s.number === surahNumber);
+        if (surahInfo) {
+          setSurahName(surahInfo.englishNameTranslation);
+          setSurahArabicName(surahInfo.name);
+          setSurahEnglishName(surahInfo.englishName);
+        }
       }
 
 
@@ -144,7 +147,6 @@ export default function SurahDetailScreen() {
 
   const handleBookmark = useCallback(
     (ayah) => {
-      console.log(surahEnglishName)
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       toggleBookmark({
         ayahNumber: ayah.number,
@@ -155,7 +157,6 @@ export default function SurahDetailScreen() {
         translationText: ayah.translationText,
         numberInSurah: ayah.numberInSurah,
       });
-      console.log(ayah)
     },
     [surahNumber, surahArabicName, surahEnglishName, toggleBookmark]
   );

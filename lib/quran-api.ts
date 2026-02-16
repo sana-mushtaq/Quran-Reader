@@ -31,16 +31,26 @@ export async function fetchSurahs() {
 
 //fetch surah audio
 export async function fetchSurahArabic(surahNumber) {
-  //if there are surah in cache fetch from thre
   const cached = await getCachedSurahArabic(surahNumber);
   if (cached) return cached;
   
-  //else go to the url
   const res = await fetch(`${BASE_URL}/surah/${surahNumber}/ar.alafasy`);
   const json = await res.json();
   if (json.code === 200) {
-    await cacheSurahArabic(surahNumber, json.data.ayahs);
-    return json.data.ayahs;
+    const surahMeta = {
+      number: json.data.number,
+      name: json.data.name,
+      englishName: json.data.englishName,
+      englishNameTranslation: json.data.englishNameTranslation,
+      numberOfAyahs: json.data.numberOfAyahs,
+      revelationType: json.data.revelationType,
+    };
+    const ayahsWithSurah = json.data.ayahs.map((a) => ({
+      ...a,
+      surah: surahMeta,
+    }));
+    await cacheSurahArabic(surahNumber, ayahsWithSurah);
+    return ayahsWithSurah;
   }
   throw new Error("Failed to fetch surah arabic");
 }
@@ -121,7 +131,19 @@ async function getDailyVerseFromCache(globalAyahNumber){
 
     if (!arabic || !translation) return null;
 
-    return { arabic, translation };
+    const surahMeta = {
+      number: targetSurah.number,
+      name: targetSurah.name,
+      englishName: targetSurah.englishName,
+      englishNameTranslation: targetSurah.englishNameTranslation,
+      numberOfAyahs: targetSurah.numberOfAyahs,
+      revelationType: targetSurah.revelationType,
+    };
+
+    return {
+      arabic: { ...arabic, surah: arabic.surah || surahMeta },
+      translation: { ...translation, surah: translation.surah || surahMeta },
+    };
   } catch {
     return null;
   }
