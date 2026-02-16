@@ -270,7 +270,7 @@ export default function SurahDetailScreen() {
           <View>
             {surahNumber !== 9 ? (
               <View style={styles.bismillah}>
-                <Text style={[styles.bismillahText, { color: theme.tint }]}>
+                <Text style={[styles.bismillahText, { color: "#C8A951" }]}>
                   بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
                 </Text>
               </View>
@@ -396,7 +396,7 @@ function AyahCard({
             <Ionicons
               name={isBookmarked ? "bookmark" : "bookmark-outline"}
               size={20}
-              color={isBookmarked ? theme.accent : theme.textSecondary}
+              color={isBookmarked ? theme.tint : theme.textSecondary}
             />
           </Pressable>
         </View>
