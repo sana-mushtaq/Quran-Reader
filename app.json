@@ -15,7 +15,10 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.quranapp"
+      "bundleIdentifier": "com.quranapp",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.quranapp",
@@ -39,7 +42,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "2fdd032d-4817-46b2-9570-96dba6f77110"
+        "projectId": "74383441-6f3f-4b7f-8ce1-ceba93a9b3d0"
       }
     }
   }
