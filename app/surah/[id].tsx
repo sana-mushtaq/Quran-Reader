@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import {
   StyleSheet,
   Text,
@@ -8,6 +8,9 @@ import {
   ActivityIndicator,
   useColorScheme,
   Platform,
+  useWindowDimensions,
+  ScrollView,
+  PanResponder,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -18,19 +21,14 @@ import { fetchSurahArabic, fetchSurahTranslation, fetchSurahs, AyahEdition, getA
 import { useQuran, AudioTrack } from "@/lib/quran-context";
 import { useDownload } from "@/lib/download-context";
 
-//surah detail screen
-
 export default function SurahDetailScreen() {
-
-  //get the surah id 
   const { id } = useLocalSearchParams();
   const colorScheme = useColorScheme();
-
-  //dark
   const isDark = colorScheme === "dark";
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
-  //check if ayah is bookmarked , playing, states
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+
   const {
     isBookmarked, toggleBookmark,
     playQueue, pauseAudio, resumeAudio, stopAudio,
@@ -40,15 +38,17 @@ export default function SurahDetailScreen() {
   } = useQuran();
   const { surahStatus, downloadSurah } = useDownload();
 
-  //list for aayah
   const flatListRef = useRef(null);
+  const bookFlatListRef = useRef(null);
 
+  const [viewMode, setViewMode] = useState("original");
   const [ayahs, setAyahs] = useState([]);
   const [surahName, setSurahName] = useState("");
   const [surahArabicName, setSurahArabicName] = useState("");
   const [surahEnglishName, setSurahEnglishName] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [bookPageIndex, setBookPageIndex] = useState(0);
 
   const surahNumber = parseInt(id || "1", 10);
   const isDownloaded = surahStatus[surahNumber] === "downloaded";
@@ -77,7 +77,6 @@ export default function SurahDetailScreen() {
         }
       }
 
-
       const combined = arabicData.map((a, i) => {
         const localUri = getLocalAudioUri(surahNumber, a.numberInSurah);
         return {
@@ -89,6 +88,7 @@ export default function SurahDetailScreen() {
           localAudio: localUri || undefined,
         };
       });
+
 
       if(surahNumber!==1) {
         combined[0].arabicText = combined[0].arabicText.replace("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ","")     
@@ -138,7 +138,6 @@ export default function SurahDetailScreen() {
   const handlePauseResume = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (isPlaying) {
-      isThisSurahPlaying = false
       await pauseAudio();
     } else {
       await resumeAudio();
@@ -167,11 +166,97 @@ export default function SurahDetailScreen() {
     loadSurah();
   }, [surahNumber, downloadSurah]);
 
-  const isQueueActive = totalTracksInQueue > 1 || (totalTracksInQueue === 1 && currentTrackId !== null);
-  let isThisSurahPlaying = currentTrackId?.startsWith(`${surahNumber}_`) ?? false;
+  const isThisSurahPlaying = currentTrackId?.startsWith(`${surahNumber}_`) ?? false;
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
+
+  const AYAHS_PER_PAGE = 3;
+
+  const bookPages = useMemo(() => {
+    if (ayahs.length === 0) return [];
+    const pages = [];
+    for (let i = 0; i < ayahs.length; i += AYAHS_PER_PAGE) {
+      pages.push(ayahs.slice(i, i + AYAHS_PER_PAGE));
+    }
+    return pages;
+  }, [ayahs]);
+
+  const findPageForAyah = useCallback((ayahNumberInSurah) => {
+    for (let i = 0; i < bookPages.length; i++) {
+      if (bookPages[i].some((a) => a.numberInSurah === ayahNumberInSurah)) {
+        return i;
+      }
+    }
+    return 0;
+  }, [bookPages]);
+
+  useEffect(() => {
+    if (viewMode === "book" && currentAyahInSurah && isThisSurahPlaying) {
+      const targetPage = findPageForAyah(currentAyahInSurah);
+      if (targetPage !== bookPageIndex) {
+        setBookPageIndex(targetPage);
+        bookFlatListRef.current?.scrollToIndex({
+          index: targetPage,
+          animated: true,
+        });
+      }
+    }
+  }, [currentAyahInSurah, viewMode, isThisSurahPlaying, findPageForAyah, bookPageIndex]);
+
+  const handleBookPlayFromPage = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (isThisSurahPlaying && isPlaying) {
+      await pauseAudio();
+      return;
+    }
+    if (isThisSurahPlaying && !isPlaying) {
+      await resumeAudio();
+      return;
+    }
+    const tracks = buildTracks();
+    if (tracks.length === 0) return;
+
+    const currentPageAyahs = bookPages[bookPageIndex];
+    if (!currentPageAyahs || currentPageAyahs.length === 0) {
+      await playQueue(tracks, 0);
+      return;
+    }
+    const firstAyahOnPage = currentPageAyahs[0].numberInSurah;
+    const startIdx = tracks.findIndex((t) => t.ayahNumberInSurah === firstAyahOnPage);
+    await playQueue(tracks, startIdx >= 0 ? startIdx : 0);
+  }, [buildTracks, playQueue, bookPages, bookPageIndex, isThisSurahPlaying, isPlaying, pauseAudio, resumeAudio]);
+
+  const goToNextPage = useCallback(() => {
+    if (bookPageIndex < bookPages.length - 1) {
+      const next = bookPageIndex + 1;
+      bookFlatListRef.current?.scrollToIndex({ index: next, animated: true });
+      setBookPageIndex(next);
+    }
+  }, [bookPageIndex, bookPages.length]);
+
+  const goToPrevPage = useCallback(() => {
+    if (bookPageIndex > 0) {
+      const prev = bookPageIndex - 1;
+      bookFlatListRef.current?.scrollToIndex({ index: prev, animated: true });
+      setBookPageIndex(prev);
+    }
+  }, [bookPageIndex]);
+
+  const swipeThreshold = 50;
+  const panResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_, gestureState) => {
+      return Math.abs(gestureState.dx) > 15 && Math.abs(gestureState.dy) < Math.abs(gestureState.dx);
+    },
+    onPanResponderRelease: (_, gestureState) => {
+      if (gestureState.dx < -swipeThreshold) {
+        goToPrevPage();
+      } else if (gestureState.dx > swipeThreshold) {
+        goToNextPage();
+      }
+    },
+  }), [goToNextPage, goToPrevPage]);
 
   const renderAyah = ({ item }) => {
     const trackId = `${surahNumber}_${item.numberInSurah}`;
@@ -202,53 +287,225 @@ export default function SurahDetailScreen() {
 
   if (error) {
     return (
-<View
-  style={[
-    styles.centered,
-    {
-      backgroundColor: theme.background,
-      paddingTop: insets.top + webTopInset,
-    },
-  ]}
->
-  {/* Back button fixed at top-left */}
-  <Pressable
-    onPress={() => router.back()}
-    hitSlop={12}
-    style={({ pressed }) => [
-      styles.backBtn,
-      { opacity: pressed ? 0.6 : 1 },
-    ]}
-  >
-    <Ionicons name="chevron-back" size={24} color={theme.text} />
-  </Pressable>
+      <View
+        style={[
+          styles.centered,
+          {
+            backgroundColor: theme.background,
+            paddingTop: insets.top + webTopInset,
+          },
+        ]}
+      >
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={12}
+          style={({ pressed }) => [
+            styles.backBtn,
+            { opacity: pressed ? 0.6 : 1 },
+          ]}
+        >
+          <Ionicons name="chevron-back" size={24} color={theme.text} />
+        </Pressable>
+        <Ionicons name="cloud-offline-outline" size={48} color={theme.textSecondary} />
+        <Text style={[styles.errorText, { color: theme.textSecondary }]}>
+          Could not load this surah
+        </Text>
+        <Pressable
+          onPress={loadSurah}
+          style={({ pressed }) => [
+            styles.retryButton,
+            {
+              backgroundColor: theme.tint,
+              opacity: pressed ? 0.8 : 1,
+            },
+          ]}
+        >
+          <Text style={styles.retryText}>Try Again</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
-  {/* Error content stays centered */}
-  <Ionicons name="cloud-offline-outline" size={48} color={theme.textSecondary} />
-  <Text style={[styles.errorText, { color: theme.textSecondary }]}>
-    Could not load this surah
-  </Text>
+  const toggleBar = (
+    <View style={styles.toggleContainer}>
+      <Pressable
+        onPress={() => setViewMode("original")}
+        style={[
+          styles.toggleBtn,
+          viewMode === "original" && { backgroundColor: theme.tint },
+        ]}
+      >
+        <Ionicons
+          name="list-outline"
+          size={16}
+          color={viewMode === "original" ? "#fff" : theme.textSecondary}
+        />
+        <Text
+          style={[
+            styles.toggleText,
+            { color: viewMode === "original" ? "#fff" : theme.textSecondary },
+          ]}
+        >
+          List
+        </Text>
+      </Pressable>
+      <Pressable
+        onPress={() => setViewMode("book")}
+        style={[
+          styles.toggleBtn,
+          viewMode === "book" && { backgroundColor: theme.tint },
+        ]}
+      >
+        <Ionicons
+          name="book-outline"
+          size={16}
+          color={viewMode === "book" ? "#fff" : theme.textSecondary}
+        />
+        <Text
+          style={[
+            styles.toggleText,
+            { color: viewMode === "book" ? "#fff" : theme.textSecondary },
+          ]}
+        >
+          Book
+        </Text>
+      </Pressable>
+    </View>
+  );
 
-  <Pressable
-    onPress={loadSurah}
-    style={({ pressed }) => [
-      styles.retryButton,
-      {
-        backgroundColor: theme.tint,
-        opacity: pressed ? 0.8 : 1,
-      },
-    ]}
-  >
-    <Text style={styles.retryText}>Try Again</Text>
-  </Pressable>
-</View>
+  if (viewMode === "book") {
+    return (
+      <View style={[styles.container, { backgroundColor: "#0F2B23" }]}>
+        <View style={[styles.topBar, { paddingTop: insets.top + 20 }]}>
+          <Pressable
+            onPress={() => { stopAudio(); router.back(); }}
+            hitSlop={12}
+            style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]}
+          >
+            <Ionicons name="chevron-back" size={24} color="#fff" />
+          </Pressable>
+          <View style={styles.topBarCenter}>
+            <Text style={[styles.topBarTitle, { color: "#fff", fontFamily: "Inter_600SemiBold" }]}>
+              Surah {surahEnglishName}
+            </Text>
+          </View>
+          <View style={styles.topBarRight}>
+            <Pressable
+              onPress={handleBookPlayFromPage}
+              hitSlop={12}
+              style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]}
+            >
+              {isLoading && isThisSurahPlaying ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons
+                  name={isPlaying && isThisSurahPlaying ? "pause" : "play"}
+                  size={22}
+                  color="#fff"
+                />
+              )}
+            </Pressable>
+          </View>
+        </View>
 
+        <View style={[styles.toggleRow, { borderBottomColor: "rgba(255,255,255,0.1)" }]}>
+          {toggleBar}
+        </View>
+
+        <FlatList
+          ref={bookFlatListRef}
+          data={bookPages}
+          horizontal
+          inverted
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          keyExtractor={(_, index) => `page_${index}`}
+          getItemLayout={(_, index) => ({
+            length: screenWidth,
+            offset: screenWidth * index,
+            index,
+          })}
+          onScrollToIndexFailed={(info) => {
+            setTimeout(() => {
+              bookFlatListRef.current?.scrollToIndex({
+                index: info.index,
+                animated: true,
+              });
+            }, 200);
+          }}
+          onMomentumScrollEnd={(e) => {
+            const idx = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
+            setBookPageIndex(idx);
+          }}
+          renderItem={({ item: pageAyahs, index: pageIdx }) => (
+            <View style={[styles.bookPage, { width: screenWidth }]} {...panResponder.panHandlers}>
+              <View style={styles.bookPageContent}>
+                {pageIdx === 0 && surahNumber !== 9 ? (
+                  <Text style={styles.bookBismillah}>
+                    بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
+                  </Text>
+                ) : null}
+                {pageAyahs.map((ayah) => {
+                  const trackId = `${surahNumber}_${ayah.numberInSurah}`;
+                  const isActive = currentTrackId === trackId && isPlaying;
+                  return (
+                    <View key={ayah.number} style={styles.bookAyahBlock}>
+                      <Text
+                        style={[
+                          styles.bookArabicText,
+                          isActive && styles.bookArabicTextActive,
+                        ]}
+                      >
+                        {ayah.arabicText} ({getArabicNumber(ayah.numberInSurah)})
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+
+              <View style={styles.bookPageFooter}>
+                <View style={styles.bookNavRow}>
+                  <Pressable
+                    onPress={goToNextPage}
+                    disabled={pageIdx >= bookPages.length - 1}
+                    style={({ pressed }) => [
+                      styles.bookNavBtn,
+                      (pageIdx >= bookPages.length - 1) && styles.bookNavBtnDisabled,
+                      { opacity: pressed ? 0.6 : 1 },
+                    ]}
+                  >
+                    <Ionicons name="chevron-back" size={18} color="#fff" />
+                    <Text style={styles.bookNavBtnText}>Next</Text>
+                  </Pressable>
+
+                  <Text style={styles.bookPageNumber}>
+                    {pageIdx + 1} / {bookPages.length}
+                  </Text>
+
+                  <Pressable
+                    onPress={goToPrevPage}
+                    disabled={pageIdx <= 0}
+                    style={({ pressed }) => [
+                      styles.bookNavBtn,
+                      pageIdx <= 0 && styles.bookNavBtnDisabled,
+                      { opacity: pressed ? 0.6 : 1 },
+                    ]}
+                  >
+                    <Text style={styles.bookNavBtnText}>Previous</Text>
+                    <Ionicons name="chevron-forward" size={18} color="#fff" />
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+          )}
+        />
+      </View>
     );
   }
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.topBar, { paddingTop: insets.top  + 20 }]}>
+      <View style={[styles.topBar, { paddingTop: insets.top + 20 }]}>
         <Pressable
           onPress={() => { stopAudio(); router.back(); }}
           hitSlop={12}
@@ -281,6 +538,10 @@ export default function SurahDetailScreen() {
             </Pressable>
           ) : null}
         </View>
+      </View>
+
+      <View style={[styles.toggleRow, { borderBottomColor: theme.border }]}>
+        {toggleBar}
       </View>
 
       <FlatList
@@ -475,6 +736,30 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     marginTop: 1,
   },
+  toggleRow: {
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    borderBottomWidth: 0,
+  },
+  toggleContainer: {
+    flexDirection: "row",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderRadius: 10,
+    padding: 3,
+    alignSelf: "center",
+  },
+  toggleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+    gap: 5,
+  },
+  toggleText: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+  },
   bismillah: {
     alignItems: "center",
     paddingVertical: 15,
@@ -583,14 +868,111 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   backBtn: {
-  position: "absolute",
-  top: 20,
-  left: 20,
-  zIndex: 10,
-  width: 36,
-  height: 36,
-  justifyContent: "center",
-  alignItems: "center",
-}
-
+    position: "absolute",
+    top: 20,
+    left: 20,
+    zIndex: 10,
+    width: 36,
+    height: 36,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  bookTopBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    gap: 10,
+  },
+  bookPlayBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  bookTopBarCenter: {
+    flex: 1,
+  },
+  bookTopBarTitle: {
+    color: "#fff",
+    fontSize: 16,
+    fontFamily: "Inter_600SemiBold",
+  },
+  bookTopBarSubtitle: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 12,
+    fontFamily: "Amiri_400Regular",
+    marginTop: 1,
+  },
+  bookPage: {
+    flex: 1,
+    justifyContent: "space-between",
+  },
+  bookPageContent: {
+    flex: 1,
+    paddingHorizontal: 28,
+    paddingTop: 20,
+    paddingBottom: 10,
+    overflow: "hidden",
+  },
+  bookBismillah: {
+    fontSize: 28,
+    fontFamily: "Amiri_700Bold",
+    color: "#fff",
+    textAlign: "center",
+    marginBottom: 24,
+    lineHeight: 50,
+  },
+  bookAyahBlock: {
+    marginBottom: 16,
+  },
+  bookArabicText: {
+    fontSize: 26,
+    lineHeight: 52,
+    textAlign: "right",
+    fontFamily: "Amiri_400Regular",
+    color: "rgba(255,255,255,0.92)",
+  },
+  bookArabicTextActive: {
+    color: "#C8A951",
+  },
+  bookVerseMarker: {
+    fontSize: 18,
+    color: "rgba(200,169,81,0.7)",
+    fontFamily: "Amiri_400Regular",
+  },
+  bookPageFooter: {
+    paddingBottom: 20,
+    paddingTop: 8,
+    paddingHorizontal: 20,
+  },
+  bookNavRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  bookNavBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.12)",
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    gap: 4,
+  },
+  bookNavBtnDisabled: {
+    opacity: 0.25,
+  },
+  bookNavBtnText: {
+    color: "#fff",
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+  },
+  bookPageNumber: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+  },
 });
