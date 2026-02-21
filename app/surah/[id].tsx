@@ -230,7 +230,7 @@ export default function SurahDetailScreen() {
         </Pressable>
         <View style={styles.topBarCenter}>
           <Text style={[styles.topBarTitle, { color: theme.text, fontFamily: "Inter_600SemiBold" }]}>
-            {surahEnglishName}
+            Surah {surahEnglishName}
           </Text>
         </View>
         <View style={styles.topBarRight}>
@@ -270,7 +270,7 @@ export default function SurahDetailScreen() {
           <View>
             {surahNumber !== 9 ? (
               <View style={styles.bismillah}>
-                <Text style={[styles.bismillahText, { color: "#C8A951" }]}>
+                <Text style={[styles.bismillahText, { color: "#fff" }]}>
                   بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
                 </Text>
               </View>

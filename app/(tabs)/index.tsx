@@ -16,6 +16,7 @@ import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { fetchRandomAyah, AyahEdition, getArabicNumber } from "@/lib/quran-api";
 import { useQuran } from "@/lib/quran-context";
+import { router } from "expo-router";
 
 export default function HomeScreen() {
   const colorScheme = useColorScheme();
@@ -206,6 +207,23 @@ export default function HomeScreen() {
                 value={dailyArabic.surah?.revelationType || ""}
                 theme={theme}
               />
+
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  router.push({
+                    pathname: "/surah/[id]",
+                    params: { id: dailyArabic.numberInSurah.toString() },
+                  });
+                }}
+                style={({ pressed }) => [
+                  styles.goToSurah,
+                  { borderColor: theme.border, opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
+                <Text style={[styles.goToSurahText, { color: theme.tint }]}>Go to Surah</Text>
+                <Ionicons name="chevron-forward" size={14} color={theme.tint} />
+              </Pressable>
             </View>
           </View>
         </View>
@@ -366,5 +384,22 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     textAlign: "right",
     maxWidth: "55%",
+  },
+    goToSurah: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 4,
+    width: "90%",
+    alignSelf: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginBottom: 12
+  },
+  goToSurahText: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
   },
 });
