@@ -202,19 +202,47 @@ export default function SurahDetailScreen() {
 
   if (error) {
     return (
-      <View style={[styles.centered, { backgroundColor: theme.background, paddingTop: insets.top + webTopInset }]}>
-        <Ionicons name="cloud-offline-outline" size={48} color={theme.textSecondary} />
-        <Text style={[styles.errorText, { color: theme.textSecondary }]}>Could not load this surah</Text>
-        <Pressable
-          onPress={loadSurah}
-          style={({ pressed }) => [
-            styles.retryButton,
-            { backgroundColor: theme.tint, opacity: pressed ? 0.8 : 1 },
-          ]}
-        >
-          <Text style={styles.retryText}>Try Again</Text>
-        </Pressable>
-      </View>
+<View
+  style={[
+    styles.centered,
+    {
+      backgroundColor: theme.background,
+      paddingTop: insets.top + webTopInset,
+    },
+  ]}
+>
+  {/* Back button fixed at top-left */}
+  <Pressable
+    onPress={() => router.back()}
+    hitSlop={12}
+    style={({ pressed }) => [
+      styles.backBtn,
+      { opacity: pressed ? 0.6 : 1 },
+    ]}
+  >
+    <Ionicons name="chevron-back" size={24} color={theme.text} />
+  </Pressable>
+
+  {/* Error content stays centered */}
+  <Ionicons name="cloud-offline-outline" size={48} color={theme.textSecondary} />
+  <Text style={[styles.errorText, { color: theme.textSecondary }]}>
+    Could not load this surah
+  </Text>
+
+  <Pressable
+    onPress={loadSurah}
+    style={({ pressed }) => [
+      styles.retryButton,
+      {
+        backgroundColor: theme.tint,
+        opacity: pressed ? 0.8 : 1,
+      },
+    ]}
+  >
+    <Text style={styles.retryText}>Try Again</Text>
+  </Pressable>
+</View>
+
     );
   }
 
@@ -554,4 +582,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
   },
+  backBtn: {
+  position: "absolute",
+  top: 20,
+  left: 20,
+  zIndex: 10,
+  width: 36,
+  height: 36,
+  justifyContent: "center",
+  alignItems: "center",
+}
+
 });
