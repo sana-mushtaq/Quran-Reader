@@ -41,13 +41,19 @@ export default function BookmarksScreen() {
   }
 
   const renderBookmark = ({ item }) => (
+
+    
     <View style={[styles.bookmarkCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+      
       <View style={styles.bookmarkHeader}>
-        <View style={styles.bookmarkBadge}>
-          <Text style={[styles.bookmarkBadgeText, { color: theme.tint }]}>
-            {item.surahEnglishName} : {item.numberInSurah}
+
+        <View style={styles.surahBadge}>
+          <Text style={styles.surahBadgeText}>
+            {item.surahEnglishName} :{getArabicNumber(item.numberInSurah)}
           </Text>
         </View>
+        
+      
         <Pressable
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -55,16 +61,19 @@ export default function BookmarksScreen() {
           }}
           hitSlop={8}
         >
-          <Ionicons name="bookmark" size={20} color={theme.accent} />
+          <Ionicons name="bookmark" size={20} color='#fff' />
         </Pressable>
       </View>
 
       <Text style={[styles.bookmarkArabic, { color: theme.arabicText }]}>{item.arabicText}</Text>
+        <View style={styles.divider} />
+      
+        <Text style={styles.translationDaily}>{item.translationText}</Text>
 
-      <Text style={[styles.bookmarkTranslation, { color: theme.translationText }]}>
-        {item.translationText}
-      </Text>
-
+        <Text style={styles.surahRef}>
+          Surah {item.surahEnglishName} - Ayah{" "}
+          {item.numberInSurah}
+        </Text>
       <Pressable
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -81,6 +90,7 @@ export default function BookmarksScreen() {
         <Text style={[styles.goToSurahText, { color: theme.tint }]}>Go to Surah</Text>
         <Ionicons name="chevron-forward" size={14} color={theme.tint} />
       </Pressable>
+
     </View>
   );
 
@@ -184,5 +194,34 @@ const styles = StyleSheet.create({
   goToSurahText: {
     fontSize: 13,
     fontFamily: "Inter_600SemiBold",
+  },
+   surahBadge: {
+    backgroundColor: "rgba(255,255,255,0.15)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  surahBadgeText: {
+    color: "#fff",
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+  },
+    divider: {
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    marginBottom: 16,
+  },
+    translationDaily: {
+    fontSize: 15,
+    lineHeight: 24,
+    color: "rgba(255,255,255,0.85)",
+    fontFamily: "Inter_400Regular",
+    marginBottom: 16,
+  },
+  surahRef: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.5)",
+    fontFamily: "Inter_400Regular",
+     marginBottom: 16,
   },
 });

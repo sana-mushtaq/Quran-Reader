@@ -232,7 +232,6 @@ export default function SurahDetailScreen() {
           <Text style={[styles.topBarTitle, { color: theme.text, fontFamily: "Inter_600SemiBold" }]}>
             {surahEnglishName}
           </Text>
-          <Text style={[styles.topBarSubtitle, { color: theme.textSecondary }]}>{surahName}</Text>
         </View>
         <View style={styles.topBarRight}>
           {Platform.OS !== "web" ? (
