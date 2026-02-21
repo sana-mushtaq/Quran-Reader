@@ -309,19 +309,14 @@ export default function SurahDetailScreen() {
             <Text style={[styles.bookSurahArabic, { color: isDark ? "#fff" : "#fff" }]}>
               {surahArabicName}
             </Text>
-            <Text style={[styles.bookSurahEnglish, { color: isDark ? theme.text : "#4A3D28" }]}>
-              {surahEnglishName}
-            </Text>
-           
+          
           </View>
 
           {surahNumber !== 9 ? (
             <View style={styles.bismillahContainer}>
-              <View style={[styles.bismillahLine, { backgroundColor: ornamentColor }]} />
               <Text style={[styles.bismillahText, { color: isDark ? "#fff" : "#fff" }]}>
                 بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
               </Text>
-              <View style={[styles.bismillahLine, { backgroundColor: ornamentColor }]} />
             </View>
           ) : null}
 
@@ -555,7 +550,7 @@ const styles = StyleSheet.create({
   bookHeader: {
     alignItems: "center",
     paddingTop: 24,
-    paddingBottom: 16,
+    paddingBottom: 0,
     paddingHorizontal: 24,
   },
   bookSurahArabic: {
@@ -580,6 +575,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 16,
     gap: 12,
+    alignSelf: "center",
   },
   bismillahLine: {
     flex: 1,
