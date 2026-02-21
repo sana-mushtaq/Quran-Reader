@@ -85,8 +85,8 @@ export default function SurahDetailScreen() {
         };
       });
 
-      if (surahNumber !== 1) {
-        combined[0].arabicText = combined[0].arabicText.replace("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ", "");
+      if(surahNumber!==1) {
+        combined[0].arabicText = combined[0].arabicText.replace("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ","")     
       }
       setAyahs(combined);
     } catch {

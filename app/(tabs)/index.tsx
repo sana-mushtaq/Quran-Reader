@@ -179,7 +179,7 @@ export default function HomeScreen() {
             <Text style={styles.translationDaily}>{dailyTranslation.text}</Text>
 
             <Text style={styles.surahRef}>
-              Surah {dailyArabic.surah?.englishName} - Ayah{" "}
+              Surah {dailyArabic.surah?.englishName} - Ayah{" "}No.{" "}
               {dailyArabic.numberInSurah}
             </Text>
           </LinearGradient>

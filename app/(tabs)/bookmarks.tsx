@@ -71,7 +71,7 @@ export default function BookmarksScreen() {
         <Text style={styles.translationDaily}>{item.translationText}</Text>
 
         <Text style={styles.surahRef}>
-          Surah {item.surahEnglishName} - Ayah{" "}
+          Surah {item.surahEnglishName} - Ayah{" "}No.{" "}
           {item.numberInSurah}
         </Text>
       <Pressable
