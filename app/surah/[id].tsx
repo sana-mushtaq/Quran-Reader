@@ -3,34 +3,30 @@ import {
   StyleSheet,
   Text,
   View,
-  FlatList,
+  ScrollView,
   Pressable,
   ActivityIndicator,
   useColorScheme,
   Platform,
+  useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
-import { fetchSurahArabic, fetchSurahTranslation, fetchSurahs, AyahEdition, getArabicNumber, getLocalAudioUri } from "@/lib/quran-api";
-import { useQuran, AudioTrack } from "@/lib/quran-context";
+import { fetchSurahArabic, fetchSurahTranslation, fetchSurahs, getArabicNumber, getLocalAudioUri } from "@/lib/quran-api";
+import { useQuran } from "@/lib/quran-context";
 import { useDownload } from "@/lib/download-context";
 
-//surah detail screen
-
 export default function SurahDetailScreen() {
-
-  //get the surah id 
   const { id } = useLocalSearchParams();
   const colorScheme = useColorScheme();
-
-  //dark
   const isDark = colorScheme === "dark";
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
-  //check if ayah is bookmarked , playing, states
+  const { width } = useWindowDimensions();
+
   const {
     isBookmarked, toggleBookmark,
     playQueue, pauseAudio, resumeAudio, stopAudio,
@@ -40,8 +36,7 @@ export default function SurahDetailScreen() {
   } = useQuran();
   const { surahStatus, downloadSurah } = useDownload();
 
-  //list for aayah
-  const flatListRef = useRef(null);
+  const scrollRef = useRef(null);
 
   const [ayahs, setAyahs] = useState([]);
   const [surahName, setSurahName] = useState("");
@@ -49,6 +44,7 @@ export default function SurahDetailScreen() {
   const [surahEnglishName, setSurahEnglishName] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [selectedAyah, setSelectedAyah] = useState(null);
 
   const surahNumber = parseInt(id || "1", 10);
   const isDownloaded = surahStatus[surahNumber] === "downloaded";
@@ -77,7 +73,6 @@ export default function SurahDetailScreen() {
         }
       }
 
-
       const combined = arabicData.map((a, i) => {
         const localUri = getLocalAudioUri(surahNumber, a.numberInSurah);
         return {
@@ -90,8 +85,8 @@ export default function SurahDetailScreen() {
         };
       });
 
-      if(surahNumber!==1) {
-        combined[0].arabicText = combined[0].arabicText.replace("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ","")     
+      if (surahNumber !== 1) {
+        combined[0].arabicText = combined[0].arabicText.replace("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ", "");
       }
       setAyahs(combined);
     } catch {
@@ -138,7 +133,6 @@ export default function SurahDetailScreen() {
   const handlePauseResume = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (isPlaying) {
-      isThisSurahPlaying = false
       await pauseAudio();
     } else {
       await resumeAudio();
@@ -167,30 +161,16 @@ export default function SurahDetailScreen() {
     loadSurah();
   }, [surahNumber, downloadSurah]);
 
-  const isQueueActive = totalTracksInQueue > 1 || (totalTracksInQueue === 1 && currentTrackId !== null);
+  const handleAyahTap = useCallback((ayah) => {
+    setSelectedAyah((prev) => (prev === ayah.numberInSurah ? null : ayah.numberInSurah));
+  }, []);
+
   let isThisSurahPlaying = currentTrackId?.startsWith(`${surahNumber}_`) ?? false;
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
 
-  const renderAyah = ({ item }) => {
-    const trackId = `${surahNumber}_${item.numberInSurah}`;
-    const isThisPlaying = currentTrackId === trackId && isPlaying;
-    const isThisLoading = currentTrackId === trackId && isLoading;
-
-    return (
-      <AyahCard
-        ayah={item}
-        theme={theme}
-        isDark={isDark}
-        isBookmarked={isBookmarked(item.number)}
-        isCurrentPlaying={isThisPlaying}
-        isCurrentLoading={isThisLoading}
-        onPlayFromHere={handlePlayFromHere}
-        onBookmark={handleBookmark}
-      />
-    );
-  };
+  const bookMaxWidth = Math.min(width - 32, 680);
 
   if (loading) {
     return (
@@ -202,53 +182,31 @@ export default function SurahDetailScreen() {
 
   if (error) {
     return (
-<View
-  style={[
-    styles.centered,
-    {
-      backgroundColor: theme.background,
-      paddingTop: insets.top + webTopInset,
-    },
-  ]}
->
-  {/* Back button fixed at top-left */}
-  <Pressable
-    onPress={() => router.back()}
-    hitSlop={12}
-    style={({ pressed }) => [
-      styles.backBtn,
-      { opacity: pressed ? 0.6 : 1 },
-    ]}
-  >
-    <Ionicons name="chevron-back" size={24} color={theme.text} />
-  </Pressable>
-
-  {/* Error content stays centered */}
-  <Ionicons name="cloud-offline-outline" size={48} color={theme.textSecondary} />
-  <Text style={[styles.errorText, { color: theme.textSecondary }]}>
-    Could not load this surah
-  </Text>
-
-  <Pressable
-    onPress={loadSurah}
-    style={({ pressed }) => [
-      styles.retryButton,
-      {
-        backgroundColor: theme.tint,
-        opacity: pressed ? 0.8 : 1,
-      },
-    ]}
-  >
-    <Text style={styles.retryText}>Try Again</Text>
-  </Pressable>
-</View>
-
+      <View style={[styles.centered, { backgroundColor: theme.background, paddingTop: insets.top + webTopInset }]}>
+        <Ionicons name="cloud-offline-outline" size={48} color={theme.textSecondary} />
+        <Text style={[styles.errorText, { color: theme.textSecondary }]}>Could not load this surah</Text>
+        <Pressable
+          onPress={loadSurah}
+          style={({ pressed }) => [
+            styles.retryButton,
+            { backgroundColor: theme.tint, opacity: pressed ? 0.8 : 1 },
+          ]}
+        >
+          <Text style={styles.retryText}>Try Again</Text>
+        </Pressable>
+      </View>
     );
   }
 
+  const bookBg = isDark ? "#1A2E27" : "#FFFEF9";
+  const bookBorder = isDark ? "#2A4A3D" : "#E0D5C0";
+  const bookShadow = isDark ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.08)";
+  const pageFold = isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)";
+  const ornamentColor = isDark ? "rgba(200,169,81,0.25)" : "rgba(200,169,81,0.4)";
+
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.topBar, { paddingTop: insets.top  + 20 }]}>
+      <View style={[styles.topBar, { paddingTop: insets.top + 20 }]}>
         <Pressable
           onPress={() => { stopAudio(); router.back(); }}
           hitSlop={12}
@@ -258,7 +216,7 @@ export default function SurahDetailScreen() {
         </Pressable>
         <View style={styles.topBarCenter}>
           <Text style={[styles.topBarTitle, { color: theme.text, fontFamily: "Inter_600SemiBold" }]}>
-            Surah {surahEnglishName}
+            {surahEnglishName}
           </Text>
         </View>
         <View style={styles.topBarRight}>
@@ -283,56 +241,170 @@ export default function SurahDetailScreen() {
         </View>
       </View>
 
-      <FlatList
-        ref={flatListRef}
-        data={ayahs}
-        keyExtractor={(item) => item.number.toString()}
-        renderItem={renderAyah}
+      <ScrollView
+        ref={scrollRef}
+        style={styles.scrollView}
         contentContainerStyle={{
-          paddingBottom: isThisSurahPlaying ? 160 : 100,
-          paddingHorizontal: 16,
-          paddingTop: 0,
+          alignItems: "center",
+          paddingBottom: isThisSurahPlaying ? 180 : 120,
+          paddingTop: 8,
         }}
         showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          <View>
-            {surahNumber !== 9 ? (
-              <View style={styles.bismillah}>
-                <Text style={[styles.bismillahText, { color: "#fff" }]}>
-                  بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
-                </Text>
-              </View>
-            ) : null}
-            <Pressable
-              onPress={isThisSurahPlaying ? handlePauseResume : handlePlayFromStart}
-              style={({ pressed }) => [
-                styles.playAllButton,
-                {
-                  backgroundColor: isThisSurahPlaying
-                    ? isDark ? "rgba(46,170,138,0.15)" : "rgba(13,92,77,0.08)"
-                    : theme.tint,
-                  opacity: pressed ? 0.85 : 1,
-                },
-              ]}
-            >
-              <Ionicons
-                name={isPlaying ? "pause" : "play"}
-                size={18}
-                color={isPlaying ? theme.tint : "#fff"}
-              />
-              <Text style={[
-                styles.playAllText,
-                { color: isPlaying ? theme.tint : "#fff" },
-              ]}>
-                {isPlaying ? "Pause" : "Play from Start"}
-              </Text>
-            </Pressable>
+      >
+        <View style={[
+          styles.bookContainer,
+          {
+            backgroundColor: bookBg,
+            borderColor: bookBorder,
+            maxWidth: bookMaxWidth,
+            ...(Platform.OS === "web"
+              ? { boxShadow: `0px 4px 24px ${bookShadow}` }
+              : { shadowColor: bookShadow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 1, shadowRadius: 16 }),
+          },
+        ]}>
+          <View style={[styles.bookSpine, { backgroundColor: pageFold }]} />
+
+          <View style={[styles.bookOrnamentTop, { borderBottomColor: ornamentColor }]} />
+
+          <View style={styles.bookHeader}>
+            <Text style={[styles.bookSurahArabic, { color: isDark ? "#fff" : "#fff" }]}>
+              {surahArabicName}
+            </Text>
+            <Text style={[styles.bookSurahEnglish, { color: isDark ? theme.text : "#4A3D28" }]}>
+              {surahEnglishName}
+            </Text>
+           
           </View>
-        }
-        ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-        initialNumToRender={10}
-        maxToRenderPerBatch={10}
-      />
+
+          {surahNumber !== 9 ? (
+            <View style={styles.bismillahContainer}>
+              <View style={[styles.bismillahLine, { backgroundColor: ornamentColor }]} />
+              <Text style={[styles.bismillahText, { color: isDark ? "#fff" : "#fff" }]}>
+                بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
+              </Text>
+              <View style={[styles.bismillahLine, { backgroundColor: ornamentColor }]} />
+            </View>
+          ) : null}
+
+          <Pressable
+            onPress={isThisSurahPlaying ? handlePauseResume : handlePlayFromStart}
+            style={({ pressed }) => [
+              styles.playButton,
+              {
+                backgroundColor: isThisSurahPlaying
+                  ? isDark ? "rgba(46,170,138,0.12)" : "rgba(13,92,77,0.06)"
+                  : theme.tint,
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
+          >
+            <Ionicons
+              name={isPlaying && isThisSurahPlaying ? "pause" : "play"}
+              size={16}
+              color={isThisSurahPlaying ? theme.tint : "#fff"}
+            />
+            <Text style={[
+              styles.playButtonText,
+              { color: isThisSurahPlaying ? theme.tint : "#fff" },
+            ]}>
+              {isPlaying && isThisSurahPlaying ? "Pause" : "Play Surah"}
+            </Text>
+          </Pressable>
+
+          <View style={[styles.bookOrnamentDivider, { borderBottomColor: ornamentColor }]} />
+
+          <View style={styles.ayahsContent}>
+            {ayahs.map((ayah, index) => {
+              const trackId = `${surahNumber}_${ayah.numberInSurah}`;
+              const isThisPlaying = currentTrackId === trackId && isPlaying;
+              const isThisLoading = currentTrackId === trackId && isLoading;
+              const isSelected = selectedAyah === ayah.numberInSurah;
+              const hasAudio = !!(ayah.localAudio || ayah.audio);
+
+              return (
+                <View key={ayah.number}>
+                  <Pressable
+                    onPress={() => handleAyahTap(ayah)}
+                    style={[
+                      styles.ayahBlock,
+                      isThisPlaying && {
+                        backgroundColor: isDark ? "rgba(46,170,138,0.08)" : "rgba(13,92,77,0.04)",
+                        borderRadius: 12,
+                        marginHorizontal: -8,
+                        paddingHorizontal: 8,
+                      },
+                    ]}
+                  >
+                    <View style={styles.ayahArabicRow}>
+
+                         <View style={[styles.ayahActions, { borderTopColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }]}>
+                        {hasAudio ? (
+                          <Pressable
+                            onPress={() => handlePlayFromHere(ayah)}
+                            style={({ pressed }) => [
+                              styles.actionBtn,
+                              { backgroundColor: isDark ? "rgba(46,170,138,0.12)" : "rgba(13,92,77,0.08)", opacity: pressed ? 0.7 : 1 },
+                            ]}
+                          >
+                            {isThisLoading ? (
+                              <ActivityIndicator size="small" color={theme.tint} />
+                            ) : (
+                              <Ionicons
+                                name={isThisPlaying ? "volume-high" : "play"}
+                                size={16}
+                                color={theme.tint}
+                              />
+                            )}
+                       
+                          </Pressable>
+                        ) : null}
+                        <Pressable
+                          onPress={() => handleBookmark(ayah)}
+                          style={({ pressed }) => [
+                            styles.actionBtn,
+                              { backgroundColor: isDark ? "rgba(46,170,138,0.12)" : "rgba(13,92,77,0.08)", opacity: pressed ? 0.7 : 1 },
+                          ]}
+                        >
+                          <Ionicons
+                            name={isBookmarked(ayah.number) ? "bookmark" : "bookmark-outline"}
+                            size={16}
+                            color={theme.tint}
+                          />
+                       
+                        </Pressable>
+                      </View>
+
+                      <Text style={[styles.ayahArabic, { color: isDark ? theme.arabicText : "#1A1A1A" }]}>
+                        {ayah.arabicText}
+                        <Text style={[styles.verseMarker, { color: isDark ? "#fff" : "fff" }]}>
+                          {" ﴿"}{getArabicNumber(ayah.numberInSurah)}{"﴾ "}
+                        </Text>
+                      </Text>
+                    </View>
+
+                    <Text style={[styles.ayahTranslation, { color: theme.translationText  }]}>
+                      {ayah.numberInSurah}. {ayah.translationText}
+                    </Text>
+
+                  </Pressable>
+
+                  {index < ayahs.length - 1 ? (
+                    <View style={[styles.ayahDivider, { backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)" }]} />
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+
+          <View style={[styles.bookOrnamentBottom, { borderTopColor: ornamentColor }]} />
+
+          <View style={styles.bookFooter}>
+            <Text style={[styles.bookFooterText, { color: isDark ? theme.textSecondary : "#9A8B70" }]}>
+              Surah {surahEnglishName} — {surahArabicName}
+            </Text>
+          </View>
+        </View>
+      </ScrollView>
 
       {isThisSurahPlaying || (currentTrackId?.startsWith(`${surahNumber}_`) && !isPlaying && currentAyahInSurah) ? (
         <View style={[
@@ -374,69 +446,6 @@ export default function SurahDetailScreen() {
   );
 }
 
-function AyahCard({
-  ayah,
-  theme,
-  isDark,
-  isBookmarked,
-  isCurrentPlaying,
-  isCurrentLoading,
-  onPlayFromHere,
-  onBookmark,
-}) {
-  const hasAudio = !!(ayah.localAudio || ayah.audio);
-
-  return (
-    <View style={[
-      styles.ayahCard,
-      {
-        backgroundColor: isCurrentPlaying
-          ? isDark ? "rgba(46,170,138,0.1)" : "rgba(13,92,77,0.06)"
-          : theme.ayahBg,
-        borderColor: isCurrentPlaying ? theme.tint : theme.border,
-        borderWidth: isCurrentPlaying ? 1.5 : 1,
-      },
-    ]}>
-      <View style={styles.ayahHeader}>
-        <View
-          style={[
-            styles.verseNumBadge,
-            { backgroundColor: isDark ? "rgba(46,170,138,0.12)" : "rgba(13,92,77,0.08)" },
-          ]}
-        >
-          <Text style={[styles.verseNumText, { color: theme.verseNumber }]}>{ayah.numberInSurah}</Text>
-        </View>
-        <View style={styles.ayahActions}>
-          {hasAudio ? (
-            <Pressable onPress={() => onPlayFromHere(ayah)} hitSlop={8}>
-              {isCurrentLoading ? (
-                <ActivityIndicator size="small" color={theme.tint} />
-              ) : (
-                <Ionicons
-                  name={isCurrentPlaying ? "volume-high" : "play"}
-                  size={isCurrentPlaying ? 20 : 18}
-                  color={theme.tint}
-                />
-              )}
-            </Pressable>
-          ) : null}
-          <Pressable onPress={() => onBookmark(ayah)} hitSlop={8}>
-            <Ionicons
-              name={isBookmarked ? "bookmark" : "bookmark-outline"}
-              size={20}
-              color={isBookmarked ? theme.tint : theme.textSecondary}
-            />
-          </Pressable>
-        </View>
-      </View>
-
-      <Text style={[styles.ayahArabic, { color: theme.arabicText }]}>{ayah.arabicText}</Text>
-
-      <Text style={[styles.ayahTranslation, { color: theme.translationText }]}>{ayah.translationText}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -470,69 +479,148 @@ const styles = StyleSheet.create({
   topBarTitle: {
     fontSize: 17,
   },
-  topBarSubtitle: {
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-    marginTop: 1,
+  scrollView: {
+    flex: 1,
   },
-  bismillah: {
-    alignItems: "center",
-    paddingVertical: 15,
+  bookContainer: {
+    width: "100%",
+    borderWidth: 1,
+    borderRadius: 4,
+    overflow: "hidden",
+    elevation: 8,
+    position: "relative",
   },
-  bismillahText: {
-    fontSize: 26,
-    fontFamily: "Amiri_400Regular",
+  bookSpine: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 3,
   },
-  playAllButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    borderRadius: 12,
-    gap: 8,
+  bookOrnamentTop: {
+    borderBottomWidth: 2,
+    marginHorizontal: 20,
+    marginTop: 16,
+  },
+  bookOrnamentDivider: {
+    borderBottomWidth: 1,
+    marginHorizontal: 32,
+    marginBottom: 8,
+  },
+  bookOrnamentBottom: {
+    borderTopWidth: 2,
+    marginHorizontal: 20,
+    marginTop: 8,
     marginBottom: 16,
   },
-  playAllText: {
-    fontSize: 15,
+  bookHeader: {
+    alignItems: "center",
+    paddingTop: 24,
+    paddingBottom: 16,
+    paddingHorizontal: 24,
+  },
+  bookSurahArabic: {
+    fontSize: 36,
+    fontFamily: "Amiri_700Bold",
+    marginBottom: 6,
+  },
+  bookSurahEnglish: {
+    fontSize: 20,
     fontFamily: "Inter_600SemiBold",
+    marginBottom: 4,
+    letterSpacing: 1,
   },
-  ayahCard: {
-    borderRadius: 14,
-    padding: 16,
-  },
-  ayahHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 14,
-  },
-  verseNumBadge: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  verseNumText: {
+  bookSurahMeaning: {
     fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    letterSpacing: 0.5,
+  },
+  bismillahContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    gap: 12,
+  },
+  bismillahLine: {
+    flex: 1,
+    height: 1,
+  },
+  bismillahText: {
+    fontSize: 24,
+    fontFamily: "Amiri_400Regular",
+    textAlign: "center",
+  },
+  playButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 6,
+    marginHorizontal: 32,
+    marginBottom: 16,
+  },
+  playButtonText: {
+    fontSize: 14,
     fontFamily: "Inter_600SemiBold",
+  },
+  ayahsContent: {
+    paddingHorizontal: 24,
+  },
+  ayahBlock: {
+    paddingVertical: 16,
+  },
+  ayahArabicRow: {
+    marginBottom: 10,
+  },
+  ayahArabic: {
+    fontSize: 26,
+    lineHeight: 50,
+    textAlign: "right",
+    fontFamily: "Amiri_400Regular",
+    writingDirection: "rtl",
+  },
+  verseMarker: {
+    fontSize: 18,
+    fontFamily: "Amiri_700Bold",
+  },
+  ayahTranslation: {
+    fontSize: 15,
+    lineHeight: 24,
+    fontFamily: "Inter_400Regular",
   },
   ayahActions: {
     flexDirection: "row",
-    gap: 14,
+    gap: 10,
+    marginTop: 12,
+    paddingBottom: 12,
+    alignSelf: "flex-end",
+  },
+  actionBtn: {
+    flexDirection: "row",
     alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
   },
-  ayahArabic: {
-    fontSize: 24,
-    lineHeight: 46,
-    textAlign: "right",
-    fontFamily: "Amiri_400Regular",
-    marginBottom: 12,
+  actionBtnText: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
   },
-  ayahTranslation: {
-    fontSize: 14,
-    lineHeight: 22,
+  ayahDivider: {
+    height: 1,
+    marginHorizontal: 8,
+  },
+  bookFooter: {
+    alignItems: "center",
+    paddingBottom: 20,
+  },
+  bookFooterText: {
+    fontSize: 11,
     fontFamily: "Inter_400Regular",
+    letterSpacing: 0.5,
   },
   errorText: {
     fontSize: 15,
@@ -582,15 +670,4 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
   },
-  backBtn: {
-  position: "absolute",
-  top: 20,
-  left: 20,
-  zIndex: 10,
-  width: 36,
-  height: 36,
-  justifyContent: "center",
-  alignItems: "center",
-}
-
 });
