@@ -16,10 +16,45 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import * as Haptics from "expo-haptics";
+import Svg, { Defs, RadialGradient, Stop, Rect } from "react-native-svg";
 import Colors from "@/constants/colors";
 import { fetchSurahArabic, fetchSurahTranslation, fetchSurahs, AyahEdition, getArabicNumber, getLocalAudioUri } from "@/lib/quran-api";
 import { useQuran, AudioTrack } from "@/lib/quran-context";
 import { useDownload } from "@/lib/download-context";
+
+function RadialGradientBg({ width, height }: { width: number; height: number }) {
+  const radius = Math.max(width, height) * 0.2;
+
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
+        <Defs>
+          <RadialGradient id="tl" cx="0" cy="0" rx={radius} ry={radius} gradientUnits="userSpaceOnUse">
+            <Stop offset="0%" stopColor="#051c16" stopOpacity="0.8" />
+            <Stop offset="100%" stopColor="#000000" stopOpacity="1" />
+          </RadialGradient>
+          <RadialGradient id="tr" cx={width} cy="0" rx={radius} ry={radius} gradientUnits="userSpaceOnUse">
+            <Stop offset="0%" stopColor="#051c16" stopOpacity="0.8" />
+            <Stop offset="100%" stopColor="#000000" stopOpacity="1" />
+          </RadialGradient>
+          <RadialGradient id="bl" cx="0" cy={height} rx={radius} ry={radius} gradientUnits="userSpaceOnUse">
+            <Stop offset="0%" stopColor="#051c16" stopOpacity="0.8" />
+            <Stop offset="100%" stopColor="#000000" stopOpacity="1" />
+          </RadialGradient>
+          <RadialGradient id="br" cx={width} cy={height} rx={radius} ry={radius} gradientUnits="userSpaceOnUse">
+            <Stop offset="0%" stopColor="#051c16" stopOpacity="0.8" />
+            <Stop offset="100%" stopColor="#000000" stopOpacity="1" />
+          </RadialGradient>
+        </Defs>
+        <Rect x="0" y="0" width={width} height={height} fill="#000000" />
+        <Rect x="0" y="0" width={width / 2} height={height / 2} fill="url(#tl)" />
+        <Rect x={width / 2} y="0" width={width / 2} height={height / 2} fill="url(#tr)" />
+        <Rect x="0" y={height / 2} width={width / 2} height={height / 2} fill="url(#bl)" />
+        <Rect x={width / 2} y={height / 2} width={width / 2} height={height / 2} fill="url(#br)" />
+      </Svg>
+    </View>
+  );
+}
 
 export default function SurahDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -88,11 +123,10 @@ export default function SurahDetailScreen() {
           localAudio: localUri || undefined,
         };
       });
-
-
-      if(surahNumber!==1) {
+  if(surahNumber!==1) {
         combined[0].arabicText = combined[0].arabicText.replace("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ","")     
       }
+   
       setAyahs(combined);
     } catch {
       setError(true);
@@ -171,16 +205,52 @@ export default function SurahDetailScreen() {
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
 
-  const AYAHS_PER_PAGE = 3;
+  const topBarHeight = insets.top + 20 + 12;
+  const toggleRowHeight = 10 + 34;
+  const pageContentPaddingTop = 20;
+  const pageContentPaddingBottom = 10;
+  const bookPageAvailableHeight = screenHeight - topBarHeight - toggleRowHeight - pageContentPaddingTop - pageContentPaddingBottom - (Platform.OS === "web" ? 67 : 0);
 
   const bookPages = useMemo(() => {
     if (ayahs.length === 0) return [];
-    const pages = [];
-    for (let i = 0; i < ayahs.length; i += AYAHS_PER_PAGE) {
-      pages.push(ayahs.slice(i, i + AYAHS_PER_PAGE));
+    const textWidth = screenWidth - 20 * 2;
+    const charsPerLine = Math.max(1, Math.floor(textWidth / 6));
+    const lineHeight = 65;
+    const footerHeight = 48;
+    const availableHeight = bookPageAvailableHeight - footerHeight;
+
+    const pages: any[][] = [];
+    let currentPage: any[] = [];
+    let totalChars = 0;
+    let hasBismillah = false;
+
+    for (let i = 0; i < ayahs.length; i++) {
+      const ayahText = `${ayahs[i].arabicText} ﴿${getArabicNumber(ayahs[i].numberInSurah)}﴾ `;
+      const newTotalChars = totalChars + ayahText.length;
+
+      let bismillahHeight = 0;
+      if (pages.length === 0 && !hasBismillah && surahNumber !== 9) {
+        bismillahHeight = 65 + 14;
+        hasBismillah = true;
+      }
+
+      const totalLines = Math.max(1, Math.ceil(newTotalChars / charsPerLine));
+      const textHeight = totalLines * lineHeight + bismillahHeight;
+
+      if (currentPage.length > 0 && textHeight > availableHeight) {
+        pages.push(currentPage);
+        currentPage = [ayahs[i]];
+        totalChars = ayahText.length;
+      } else {
+        currentPage.push(ayahs[i]);
+        totalChars = newTotalChars;
+      }
+    }
+    if (currentPage.length > 0) {
+      pages.push(currentPage);
     }
     return pages;
-  }, [ayahs]);
+  }, [ayahs, bookPageAvailableHeight, screenWidth, surahNumber]);
 
   const findPageForAyah = useCallback((ayahNumberInSurah) => {
     for (let i = 0; i < bookPages.length; i++) {
@@ -375,7 +445,8 @@ export default function SurahDetailScreen() {
 
   if (viewMode === "book") {
     return (
-      <View style={[styles.container, { backgroundColor: "#0F2B23" }]}>
+      <View style={[styles.container, { backgroundColor: "#000000" }]}>
+        <RadialGradientBg width={screenWidth} height={screenHeight} />
         <View style={[styles.topBar, { paddingTop: insets.top + 20 }]}>
           <Pressable
             onPress={() => { stopAudio(); router.back(); }}
@@ -445,56 +516,25 @@ export default function SurahDetailScreen() {
                     بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
                   </Text>
                 ) : null}
-                {pageAyahs.map((ayah) => {
-                  const trackId = `${surahNumber}_${ayah.numberInSurah}`;
-                  const isActive = currentTrackId === trackId && isPlaying;
-                  return (
-                    <View key={ayah.number} style={styles.bookAyahBlock}>
-                      <Text
-                        style={[
-                          styles.bookArabicText,
-                          isActive && styles.bookArabicTextActive,
-                        ]}
-                      >
-                        {ayah.arabicText} ({getArabicNumber(ayah.numberInSurah)})
+                <Text style={styles.bookArabicText}>
+                  {pageAyahs.map((ayah) => {
+                    const trackId = `${surahNumber}_${ayah.numberInSurah}`;
+                    const isActive = currentTrackId === trackId && isPlaying;
+                    return (
+                      <Text key={ayah.number}>
+                        <Text style={isActive ? styles.bookArabicTextActive : undefined}>
+                          {ayah.arabicText}
+                        </Text>
+                        <Text style={styles.bookVerseMarker}> {"("}{getArabicNumber(ayah.numberInSurah)}{")"} </Text>
                       </Text>
-                    </View>
-                  );
-                })}
+                    );
+                  })}
+                </Text>
               </View>
-
               <View style={styles.bookPageFooter}>
-                <View style={styles.bookNavRow}>
-                  <Pressable
-                    onPress={goToNextPage}
-                    disabled={pageIdx >= bookPages.length - 1}
-                    style={({ pressed }) => [
-                      styles.bookNavBtn,
-                      (pageIdx >= bookPages.length - 1) && styles.bookNavBtnDisabled,
-                      { opacity: pressed ? 0.6 : 1 },
-                    ]}
-                  >
-                    <Ionicons name="chevron-back" size={18} color="#fff" />
-                    <Text style={styles.bookNavBtnText}>Next</Text>
-                  </Pressable>
-
-                  <Text style={styles.bookPageNumber}>
-                    {pageIdx + 1} / {bookPages.length}
-                  </Text>
-
-                  <Pressable
-                    onPress={goToPrevPage}
-                    disabled={pageIdx <= 0}
-                    style={({ pressed }) => [
-                      styles.bookNavBtn,
-                      pageIdx <= 0 && styles.bookNavBtnDisabled,
-                      { opacity: pressed ? 0.6 : 1 },
-                    ]}
-                  >
-                    <Text style={styles.bookNavBtnText}>Previous</Text>
-                    <Ionicons name="chevron-forward" size={18} color="#fff" />
-                  </Pressable>
-                </View>
+                <Text style={styles.bookPageNumber}>
+                  {pageIdx + 1} / {bookPages.length}
+                </Text>
               </View>
             </View>
           )}
@@ -912,26 +952,26 @@ const styles = StyleSheet.create({
   },
   bookPageContent: {
     flex: 1,
-    paddingHorizontal: 28,
-    paddingTop: 20,
-    paddingBottom: 10,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 6,
     overflow: "hidden",
   },
   bookBismillah: {
-    fontSize: 28,
+    fontSize: 24,
     fontFamily: "Amiri_700Bold",
     color: "#fff",
     textAlign: "center",
-    marginBottom: 24,
-    lineHeight: 50,
+    marginBottom: 14,
+    lineHeight: 65,
   },
   bookAyahBlock: {
-    marginBottom: 16,
+    marginBottom: 8,
   },
   bookArabicText: {
-    fontSize: 26,
-    lineHeight: 52,
-    textAlign: "right",
+    fontSize: 24,
+    lineHeight: 65,
+    textAlign: "justify",
     fontFamily: "Amiri_400Regular",
     color: "rgba(255,255,255,0.92)",
   },
@@ -947,6 +987,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     paddingTop: 8,
     paddingHorizontal: 20,
+    alignItems: "center",
   },
   bookNavRow: {
     flexDirection: "row",
