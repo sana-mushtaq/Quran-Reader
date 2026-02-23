@@ -178,8 +178,23 @@ export function DownloadProvider({ children }) {
 
   // cancel any ongoing downloads
   const cancelDownload = useCallback(() => {
-    cancelRef.current = true
+  cancelRef.current = true
+
+  // hide the "downloading all" UI
+  setIsDownloadingAll(false)
+  setDownloadProgress(null)
+
+  // reset any surahs that were downloading back to "none"
+  setSurahStatus(prev => {
+      const next = { ...prev }
+      Object.keys(next).forEach(k => {
+        if (next[k] === "downloading") next[k] = "none"
+      })
+      AsyncStorage.setItem(DOWNLOAD_STATUS_KEY, JSON.stringify(next))
+      return next
+    })
   }, [])
+
 
   // remove a single surah's download
   const removeSurahDownload = useCallback(async (surahNumber, totalAyahs) => {

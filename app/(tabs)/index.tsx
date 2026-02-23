@@ -213,7 +213,7 @@ export default function HomeScreen() {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   router.push({
                     pathname: "/surah/[id]",
-                    params: { id: dailyArabic.numberInSurah.toString() },
+                    params: { id: dailyArabic.surah?.number.toString() },
                   });
                 }}
                 style={({ pressed }) => [

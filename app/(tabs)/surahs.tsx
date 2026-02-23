@@ -66,6 +66,7 @@ export default function SurahsScreen() {
     }
   };
 
+
   const renderSurah = ({ item }) => {
     const status = surahStatus[item.number];
     return (
@@ -183,14 +184,9 @@ export default function SurahsScreen() {
                 ) : allDownloaded ? (
                   <View style={[styles.downloadCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                     <View style={styles.downloadCardTop}>
-                      <Ionicons name="checkmark-circle" size={22} color={theme.tint} />
-                      <Text style={[styles.downloadTitle, { color: theme.tint, fontFamily: "Inter_600SemiBold", marginLeft: 8 }]}>
-                        All content downloaded
-                      </Text>
+                      
                     </View>
-                    <Text style={[styles.downloadSubtext, { color: theme.textSecondary, marginTop: 4 }]}>
-                      The app works offline now
-                    </Text>
+                    
                   </View>
                 ) : (
                   <Pressable

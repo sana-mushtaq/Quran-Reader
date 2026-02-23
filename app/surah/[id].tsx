@@ -63,6 +63,7 @@ export default function SurahDetailScreen() {
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const audioDrivenRef = useRef(false);
 
   const {
     isBookmarked, toggleBookmark,
@@ -123,10 +124,11 @@ export default function SurahDetailScreen() {
           localAudio: localUri || undefined,
         };
       });
-  if(surahNumber!==1) {
+
+
+      if(surahNumber!==1) {
         combined[0].arabicText = combined[0].arabicText.replace("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ","")     
       }
-   
       setAyahs(combined);
     } catch {
       setError(true);
@@ -138,6 +140,7 @@ export default function SurahDetailScreen() {
   useEffect(() => {
     loadSurah();
     return () => {
+      audioDrivenRef.current = false;
       stopAudio();
     };
   }, [surahNumber]);
@@ -214,31 +217,28 @@ export default function SurahDetailScreen() {
   const bookPages = useMemo(() => {
     if (ayahs.length === 0) return [];
     const textWidth = screenWidth - 20 * 2;
-    const charsPerLine = Math.max(1, Math.floor(textWidth / 6));
+    const charsPerLine = Math.max(1, Math.floor(textWidth / 6.1));
     const lineHeight = 65;
     const footerHeight = 48;
+    const bismillahTotalHeight = 65 + 14;
     const availableHeight = bookPageAvailableHeight - footerHeight;
 
     const pages: any[][] = [];
     let currentPage: any[] = [];
     let totalChars = 0;
-    let hasBismillah = false;
+    let isFirstPage = true;
 
     for (let i = 0; i < ayahs.length; i++) {
       const ayahText = `${ayahs[i].arabicText} ﴿${getArabicNumber(ayahs[i].numberInSurah)}﴾ `;
       const newTotalChars = totalChars + ayahText.length;
 
-      let bismillahHeight = 0;
-      if (pages.length === 0 && !hasBismillah && surahNumber !== 9) {
-        bismillahHeight = 65 + 14;
-        hasBismillah = true;
-      }
-
+      const extraHeight = (isFirstPage && currentPage.length === 0 && surahNumber !== 9) ? bismillahTotalHeight : 0;
       const totalLines = Math.max(1, Math.ceil(newTotalChars / charsPerLine));
-      const textHeight = totalLines * lineHeight + bismillahHeight;
+      const textHeight = totalLines * lineHeight + extraHeight;
 
       if (currentPage.length > 0 && textHeight > availableHeight) {
         pages.push(currentPage);
+        isFirstPage = false;
         currentPage = [ayahs[i]];
         totalChars = ayahText.length;
       } else {
@@ -262,40 +262,43 @@ export default function SurahDetailScreen() {
   }, [bookPages]);
 
   useEffect(() => {
-    if (viewMode === "book" && currentAyahInSurah && isThisSurahPlaying) {
-      const targetPage = findPageForAyah(currentAyahInSurah);
-      if (targetPage !== bookPageIndex) {
-        setBookPageIndex(targetPage);
-        bookFlatListRef.current?.scrollToIndex({
-          index: targetPage,
-          animated: true,
-        });
-      }
-    }
   }, [currentAyahInSurah, viewMode, isThisSurahPlaying, findPageForAyah, bookPageIndex]);
 
   const handleBookPlayFromPage = useCallback(async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (isThisSurahPlaying && isPlaying) {
-      await pauseAudio();
-      return;
-    }
-    if (isThisSurahPlaying && !isPlaying) {
-      await resumeAudio();
-      return;
-    }
-    const tracks = buildTracks();
-    if (tracks.length === 0) return;
+  audioDrivenRef.current = true;
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    const currentPageAyahs = bookPages[bookPageIndex];
-    if (!currentPageAyahs || currentPageAyahs.length === 0) {
-      await playQueue(tracks, 0);
-      return;
+  const tracks = buildTracks();
+  if (tracks.length === 0) return;
+
+  // Get first ayah of current page
+  const currentPageAyahs = bookPages[bookPageIndex];
+  if (!currentPageAyahs || currentPageAyahs.length === 0) return;
+
+  const firstAyahOnPage = currentPageAyahs[0].numberInSurah;
+  const startIdx = tracks.findIndex((t) => t.ayahNumberInSurah === firstAyahOnPage);
+
+  // If already playing the correct page, just pause/resume
+  if (isThisSurahPlaying && isPlaying) {
+    await pauseAudio();
+    return;
+  }
+
+  if (isThisSurahPlaying && !isPlaying) {
+    // If current track is NOT the first ayah of this page, restart from first ayah
+    const currentTrackNum = parseInt(currentTrackId?.split("_")[1] || "0", 10);
+    if (currentTrackNum !== firstAyahOnPage) {
+      await playQueue(tracks, startIdx >= 0 ? startIdx : 0);
+    } else {
+      await resumeAudio();
     }
-    const firstAyahOnPage = currentPageAyahs[0].numberInSurah;
-    const startIdx = tracks.findIndex((t) => t.ayahNumberInSurah === firstAyahOnPage);
-    await playQueue(tracks, startIdx >= 0 ? startIdx : 0);
-  }, [buildTracks, playQueue, bookPages, bookPageIndex, isThisSurahPlaying, isPlaying, pauseAudio, resumeAudio]);
+    return;
+  }
+
+  // Otherwise, start playing from the first ayah of current page
+  await playQueue(tracks, startIdx >= 0 ? startIdx : 0)
+  }, [buildTracks, playQueue, bookPages, bookPageIndex, isThisSurahPlaying, isPlaying, pauseAudio, resumeAudio, currentTrackId]);
+
 
   const goToNextPage = useCallback(() => {
     if (bookPageIndex < bookPages.length - 1) {
@@ -328,6 +331,37 @@ export default function SurahDetailScreen() {
     },
   }), [goToNextPage, goToPrevPage]);
 
+  
+  const prevTrackIdRef = useRef<string | null>(null)
+
+useEffect(() => {
+  if (!audioDrivenRef.current || !bookPages.length) return
+
+  const currentPageAyahs = bookPages[bookPageIndex]
+  if (!currentPageAyahs?.length) return
+
+  const lastAyahNumber = currentPageAyahs[currentPageAyahs.length - 1].numberInSurah
+
+  // Only advance if the track just finished
+  const prevTrackNum = prevTrackIdRef.current ? parseInt(prevTrackIdRef.current.split('_')[1], 10) : null
+  const currentTrackNum = currentTrackId ? parseInt(currentTrackId.split('_')[1], 10) : null
+
+  if (prevTrackNum === lastAyahNumber && currentTrackNum !== lastAyahNumber) {
+    // Last ayah finished, move to next page if available
+    if (bookPageIndex < bookPages.length - 1) {
+      setTimeout(() => {
+        if (bookPageIndex < bookPages.length - 1) {
+          goToNextPage()
+        }
+      }, 100)
+    }
+  }
+
+  prevTrackIdRef.current = currentTrackId
+  }, [currentTrackId, bookPageIndex, bookPages, goToNextPage])
+
+
+
   const renderAyah = ({ item }) => {
     const trackId = `${surahNumber}_${item.numberInSurah}`;
     const isThisPlaying = currentTrackId === trackId && isPlaying;
@@ -357,44 +391,54 @@ export default function SurahDetailScreen() {
 
   if (error) {
     return (
-      <View
-        style={[
-          styles.centered,
-          {
-            backgroundColor: theme.background,
-            paddingTop: insets.top + webTopInset,
-          },
-        ]}
-      >
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={12}
-          style={({ pressed }) => [
-            styles.backBtn,
-            { opacity: pressed ? 0.6 : 1 },
-          ]}
-        >
-          <Ionicons name="chevron-back" size={24} color={theme.text} />
-        </Pressable>
-        <Ionicons name="cloud-offline-outline" size={48} color={theme.textSecondary} />
-        <Text style={[styles.errorText, { color: theme.textSecondary }]}>
-          Could not load this surah
-        </Text>
-        <Pressable
-          onPress={loadSurah}
-          style={({ pressed }) => [
-            styles.retryButton,
-            {
-              backgroundColor: theme.tint,
-              opacity: pressed ? 0.8 : 1,
-            },
-          ]}
-        >
-          <Text style={styles.retryText}>Try Again</Text>
-        </Pressable>
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
+        {/* Top bar – SAME position as everywhere else */}
+        <View style={[styles.topBar, { paddingTop: insets.top + 20 }]}>
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={12}
+            style={({ pressed }) => [
+              styles.iconBtn,
+              { opacity: pressed ? 0.6 : 1 },
+            ]}
+          >
+            <Ionicons name="chevron-back" size={24} color={theme.text} />
+          </Pressable>
+
+          {/* Keeps title spacing consistent */}
+          <View style={styles.topBarCenter} />
+          <View style={styles.topBarRight} />
+        </View>
+
+        {/* Error content */}
+        <View style={styles.centered}>
+          <Ionicons
+            name="cloud-offline-outline"
+            size={48}
+            color={theme.textSecondary}
+          />
+
+          <Text style={[styles.errorText, { color: theme.textSecondary }]}>
+            Could not load this surah
+          </Text>
+
+          <Pressable
+            onPress={loadSurah}
+            style={({ pressed }) => [
+              styles.retryButton,
+              {
+                backgroundColor: theme.tint,
+                opacity: pressed ? 0.8 : 1,
+              },
+            ]}
+          >
+            <Text style={styles.retryText}>Try Again</Text>
+          </Pressable>
+        </View>
       </View>
-    );
+    )
   }
+
 
   const toggleBar = (
     <View style={styles.toggleContainer}>
@@ -525,7 +569,7 @@ export default function SurahDetailScreen() {
                         <Text style={isActive ? styles.bookArabicTextActive : undefined}>
                           {ayah.arabicText}
                         </Text>
-                        <Text style={styles.bookVerseMarker}> {"("}{getArabicNumber(ayah.numberInSurah)}{")"} </Text>
+                        <Text style={styles.bookVerseMarker}> ﴿{getArabicNumber(ayah.numberInSurah)}﴾ </Text>
                       </Text>
                     );
                   })}
@@ -969,6 +1013,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   bookArabicText: {
+    direction: "rtl",
     fontSize: 24,
     lineHeight: 65,
     textAlign: "justify",
