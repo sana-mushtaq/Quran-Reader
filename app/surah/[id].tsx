@@ -1,70 +1,224 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
-import {
-  StyleSheet,
-  Text,
-  View,
-  FlatList,
-  Pressable,
-  ActivityIndicator,
-  useColorScheme,
-  Platform,
-  useWindowDimensions,
-  ScrollView,
-  PanResponder,
-} from "react-native";
+import { StyleSheet, Text, View, FlatList, Pressable, ActivityIndicator, useColorScheme, Platform, useWindowDimensions, ScrollView, PanResponder } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import * as Haptics from "expo-haptics";
-import Svg, { Defs, RadialGradient, Stop, Rect } from "react-native-svg";
+import Svg, { Defs, RadialGradient, Stop, Rect, Path, G, Line, Circle } from "react-native-svg";
 import Colors from "@/constants/colors";
 import { fetchSurahArabic, fetchSurahTranslation, fetchSurahs, AyahEdition, getArabicNumber, getLocalAudioUri } from "@/lib/quran-api";
 import { useQuran, AudioTrack } from "@/lib/quran-context";
 import { useDownload } from "@/lib/download-context";
+import AsyncStorage from "@react-native-async-storage/async-storage"
+const VIEW_MODE_KEY = "surah_view_mode"
+const DEFAULT_VIEW_MODE = "original" // list view
 
 function RadialGradientBg({ width, height }: { width: number; height: number }) {
-  const radius = Math.max(width, height) * 0.2;
+  return (
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: "#fef9f3" }]} pointerEvents="none" />
+  );
+}
+
+function SurahBanner({ name, width }: { name: string; width: number }) {
+  const w = width - 32;
+  const h = 56;
+  const g = "#8C7563";
+  const g2 = "#8C7563";
+  const p = 4;
+  const cx = w / 2;
+  const cy = h / 2;
+  const cs = 16;
+
+  const cornerTL = `M ${p} ${p + cs} Q ${p} ${p}, ${p + cs} ${p}`;
+  const cornerTR = `M ${w - p - cs} ${p} Q ${w - p} ${p}, ${w - p} ${p + cs}`;
+  const cornerBR = `M ${w - p} ${h - p - cs} Q ${w - p} ${h - p}, ${w - p - cs} ${h - p}`;
+  const cornerBL = `M ${p + cs} ${h - p} Q ${p} ${h - p}, ${p} ${h - p - cs}`;
+
+  const flourishTL = `
+    M ${p + cs + 4} ${p + 0.5} C ${p + cs - 2} ${p + 3}, ${p + 6} ${p + cs - 6}, ${p + 0.5} ${p + cs + 4}
+    M ${p + cs + 2} ${p + 1.5} C ${p + cs - 5} ${p + 6}, ${p + 6} ${p + cs - 5}, ${p + 1.5} ${p + cs + 2}
+    M ${p + 4} ${p + 4} Q ${p + 8} ${p + 10}, ${p + 14} ${p + 6}
+    M ${p + 4} ${p + 4} Q ${p + 10} ${p + 8}, ${p + 6} ${p + 14}
+    M ${p + 3} ${p + 8} C ${p + 6} ${p + 12}, ${p + 10} ${p + 10}, ${p + 8} ${p + 3}
+  `;
+  const flourishTR = `
+    M ${w - p - cs - 4} ${p + 0.5} C ${w - p - cs + 2} ${p + 3}, ${w - p - 6} ${p + cs - 6}, ${w - p - 0.5} ${p + cs + 4}
+    M ${w - p - cs - 2} ${p + 1.5} C ${w - p - cs + 5} ${p + 6}, ${w - p - 6} ${p + cs - 5}, ${w - p - 1.5} ${p + cs + 2}
+    M ${w - p - 4} ${p + 4} Q ${w - p - 8} ${p + 10}, ${w - p - 14} ${p + 6}
+    M ${w - p - 4} ${p + 4} Q ${w - p - 10} ${p + 8}, ${w - p - 6} ${p + 14}
+    M ${w - p - 3} ${p + 8} C ${w - p - 6} ${p + 12}, ${w - p - 10} ${p + 10}, ${w - p - 8} ${p + 3}
+  `;
+  const flourishBR = `
+    M ${w - p - 0.5} ${h - p - cs - 4} C ${w - p - 3} ${h - p - cs + 2}, ${w - p - cs + 6} ${h - p - 6}, ${w - p - cs - 4} ${h - p - 0.5}
+    M ${w - p - 1.5} ${h - p - cs - 2} C ${w - p - 6} ${h - p - cs + 5}, ${w - p - cs + 5} ${h - p - 6}, ${w - p - cs - 2} ${h - p - 1.5}
+    M ${w - p - 4} ${h - p - 4} Q ${w - p - 8} ${h - p - 10}, ${w - p - 14} ${h - p - 6}
+    M ${w - p - 4} ${h - p - 4} Q ${w - p - 10} ${h - p - 8}, ${w - p - 6} ${h - p - 14}
+    M ${w - p - 3} ${h - p - 8} C ${w - p - 6} ${h - p - 12}, ${w - p - 10} ${h - p - 10}, ${w - p - 8} ${h - p - 3}
+  `;
+  const flourishBL = `
+    M ${p + 0.5} ${h - p - cs - 4} C ${p + 3} ${h - p - cs + 2}, ${p + cs - 6} ${h - p - 6}, ${p + cs + 4} ${h - p - 0.5}
+    M ${p + 1.5} ${h - p - cs - 2} C ${p + 6} ${h - p - cs + 5}, ${p + cs - 5} ${h - p - 6}, ${p + cs + 2} ${h - p - 1.5}
+    M ${p + 4} ${h - p - 4} Q ${p + 8} ${h - p - 10}, ${p + 14} ${h - p - 6}
+    M ${p + 4} ${h - p - 4} Q ${p + 10} ${h - p - 8}, ${p + 6} ${h - p - 14}
+    M ${p + 3} ${h - p - 8} C ${p + 6} ${h - p - 12}, ${p + 10} ${h - p - 10}, ${p + 8} ${h - p - 3}
+  `;
+
+  const topCenter = `
+    M ${cx - 30} ${p + 0.5} C ${cx - 20} ${p + 6}, ${cx - 8} ${p + 0.5}, ${cx} ${p + 7}
+    C ${cx + 8} ${p + 0.5}, ${cx + 20} ${p + 6}, ${cx + 30} ${p + 0.5}
+    M ${cx - 18} ${p + 1} Q ${cx - 12} ${p + 5}, ${cx - 6} ${p + 2}
+    M ${cx + 6} ${p + 2} Q ${cx + 12} ${p + 5}, ${cx + 18} ${p + 1}
+    M ${cx} ${p + 1} L ${cx} ${p + 4}
+    M ${cx - 3} ${p + 1.5} L ${cx - 3} ${p + 3.5}
+    M ${cx + 3} ${p + 1.5} L ${cx + 3} ${p + 3.5}
+  `;
+  const bottomCenter = `
+    M ${cx - 30} ${h - p - 0.5} C ${cx - 20} ${h - p - 6}, ${cx - 8} ${h - p - 0.5}, ${cx} ${h - p - 7}
+    C ${cx + 8} ${h - p - 0.5}, ${cx + 20} ${h - p - 6}, ${cx + 30} ${h - p - 0.5}
+    M ${cx - 18} ${h - p - 1} Q ${cx - 12} ${h - p - 5}, ${cx - 6} ${h - p - 2}
+    M ${cx + 6} ${h - p - 2} Q ${cx + 12} ${h - p - 5}, ${cx + 18} ${h - p - 1}
+    M ${cx} ${h - p - 1} L ${cx} ${h - p - 4}
+    M ${cx - 3} ${h - p - 1.5} L ${cx - 3} ${h - p - 3.5}
+    M ${cx + 3} ${h - p - 1.5} L ${cx + 3} ${h - p - 3.5}
+  `;
+
+  const lx = p + 1;
+  const rx = w - p - 1;
+  const sideL = `
+    M ${lx} ${cy - 18} Q ${lx + 7} ${cy - 14}, ${lx + 10} ${cy - 10}
+    Q ${lx + 12} ${cy - 6}, ${lx + 10} ${cy}
+    Q ${lx + 12} ${cy + 6}, ${lx + 10} ${cy + 10}
+    Q ${lx + 7} ${cy + 14}, ${lx} ${cy + 18}
+    M ${lx} ${cy - 18} Q ${lx + 4} ${cy - 12}, ${lx + 6} ${cy - 8}
+    Q ${lx + 8} ${cy - 4}, ${lx + 6} ${cy}
+    Q ${lx + 8} ${cy + 4}, ${lx + 6} ${cy + 8}
+    Q ${lx + 4} ${cy + 12}, ${lx} ${cy + 18}
+    M ${lx + 3} ${cy - 14} C ${lx + 8} ${cy - 10}, ${lx + 8} ${cy - 5}, ${lx + 5} ${cy}
+    C ${lx + 8} ${cy + 5}, ${lx + 8} ${cy + 10}, ${lx + 3} ${cy + 14}
+    M ${lx + 10} ${cy} L ${lx + 14} ${cy}
+    M ${lx + 10} ${cy - 5} L ${lx + 13} ${cy - 3}
+    M ${lx + 10} ${cy + 5} L ${lx + 13} ${cy + 3}
+    M ${lx + 8} ${cy - 10} Q ${lx + 14} ${cy - 8}, ${lx + 16} ${cy - 4}
+    M ${lx + 8} ${cy + 10} Q ${lx + 14} ${cy + 8}, ${lx + 16} ${cy + 4}
+    M ${lx} ${cy} L ${lx + 4} ${cy}
+    M ${lx + 1} ${cy - 3} L ${lx + 3} ${cy - 1}
+    M ${lx + 1} ${cy + 3} L ${lx + 3} ${cy + 1}
+  `;
+  const sideR = `
+    M ${rx} ${cy - 18} Q ${rx - 7} ${cy - 14}, ${rx - 10} ${cy - 10}
+    Q ${rx - 12} ${cy - 6}, ${rx - 10} ${cy}
+    Q ${rx - 12} ${cy + 6}, ${rx - 10} ${cy + 10}
+    Q ${rx - 7} ${cy + 14}, ${rx} ${cy + 18}
+    M ${rx} ${cy - 18} Q ${rx - 4} ${cy - 12}, ${rx - 6} ${cy - 8}
+    Q ${rx - 8} ${cy - 4}, ${rx - 6} ${cy}
+    Q ${rx - 8} ${cy + 4}, ${rx - 6} ${cy + 8}
+    Q ${rx - 4} ${cy + 12}, ${rx} ${cy + 18}
+    M ${rx - 3} ${cy - 14} C ${rx - 8} ${cy - 10}, ${rx - 8} ${cy - 5}, ${rx - 5} ${cy}
+    C ${rx - 8} ${cy + 5}, ${rx - 8} ${cy + 10}, ${rx - 3} ${cy + 14}
+    M ${rx - 10} ${cy} L ${rx - 14} ${cy}
+    M ${rx - 10} ${cy - 5} L ${rx - 13} ${cy - 3}
+    M ${rx - 10} ${cy + 5} L ${rx - 13} ${cy + 3}
+    M ${rx - 8} ${cy - 10} Q ${rx - 14} ${cy - 8}, ${rx - 16} ${cy - 4}
+    M ${rx - 8} ${cy + 10} Q ${rx - 14} ${cy + 8}, ${rx - 16} ${cy + 4}
+    M ${rx} ${cy} L ${rx - 4} ${cy}
+    M ${rx - 1} ${cy - 3} L ${rx - 3} ${cy - 1}
+    M ${rx - 1} ${cy + 3} L ${rx - 3} ${cy + 1}
+  `;
+
+  const sideDotsL = [
+    { x: lx + 5, y: cy },
+    { x: lx + 11, y: cy - 7 },
+    { x: lx + 11, y: cy + 7 },
+    { x: lx + 14, y: cy },
+  ];
+  const sideDotsR = sideDotsL.map(d => ({ x: w - d.x, y: d.y }));
+
+  const topEdgeDots = Array.from({ length: 7 }, (_, i) => {
+    const x = p + cs + 28 + i * ((w - 2 * p - 2 * cs - 56 - 60) / 6);
+    return { cx: x, cy: p + 2 };
+  });
+  const bottomEdgeDots = topEdgeDots.map(d => ({ cx: d.cx, cy: h - p - 2 }));
+
+  const topEdgeDotsR = Array.from({ length: 7 }, (_, i) => {
+    const x = cx + 30 + 4 + i * ((w - p - cs - 28 - cx - 34) / 6);
+    return { cx: x, cy: p + 2 };
+  });
+  const bottomEdgeDotsR = topEdgeDotsR.map(d => ({ cx: d.cx, cy: h - p - 2 }));
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
-        <Defs>
-          <RadialGradient id="tl" cx="0" cy="0" rx={radius} ry={radius} gradientUnits="userSpaceOnUse">
-            <Stop offset="0%" stopColor="#051c16" stopOpacity="0.8" />
-            <Stop offset="100%" stopColor="#000000" stopOpacity="1" />
-          </RadialGradient>
-          <RadialGradient id="tr" cx={width} cy="0" rx={radius} ry={radius} gradientUnits="userSpaceOnUse">
-            <Stop offset="0%" stopColor="#051c16" stopOpacity="0.8" />
-            <Stop offset="100%" stopColor="#000000" stopOpacity="1" />
-          </RadialGradient>
-          <RadialGradient id="bl" cx="0" cy={height} rx={radius} ry={radius} gradientUnits="userSpaceOnUse">
-            <Stop offset="0%" stopColor="#051c16" stopOpacity="0.8" />
-            <Stop offset="100%" stopColor="#000000" stopOpacity="1" />
-          </RadialGradient>
-          <RadialGradient id="br" cx={width} cy={height} rx={radius} ry={radius} gradientUnits="userSpaceOnUse">
-            <Stop offset="0%" stopColor="#051c16" stopOpacity="0.8" />
-            <Stop offset="100%" stopColor="#000000" stopOpacity="1" />
-          </RadialGradient>
-        </Defs>
-        <Rect x="0" y="0" width={width} height={height} fill="#000000" />
-        <Rect x="0" y="0" width={width / 2} height={height / 2} fill="url(#tl)" />
-        <Rect x={width / 2} y="0" width={width / 2} height={height / 2} fill="url(#tr)" />
-        <Rect x="0" y={height / 2} width={width / 2} height={height / 2} fill="url(#bl)" />
-        <Rect x={width / 2} y={height / 2} width={width / 2} height={height / 2} fill="url(#br)" />
-      </Svg>
+    <View style={{ alignItems: "center", marginVertical: 18 }}>
+      <View style={{ width: w, height: h }}>
+        <Svg width={w} height={h} style={StyleSheet.absoluteFill}>
+          <Defs>
+            <RadialGradient id="bannerBg" cx="50%" cy="50%" rx="60%" ry="60%">
+              <Stop offset="0%" stopColor={g} stopOpacity="0.12" />
+              <Stop offset="100%" stopColor={g} stopOpacity="0.04" />
+            </RadialGradient>
+          </Defs>
+          <Rect x={p} y={p} width={w - p * 2} height={h - p * 2} rx={2} fill="url(#bannerBg)" stroke={g} strokeWidth={1.4} />
+          <Rect x={p + 3.5} y={p + 3.5} width={w - p * 2 - 7} height={h - p * 2 - 7} rx={1} fill="none" stroke={g} strokeWidth={0.5} opacity={0.45} />
+
+          <Path d={cornerTL} fill="none" stroke={g2} strokeWidth={2} strokeLinecap="round" />
+          <Path d={cornerTR} fill="none" stroke={g2} strokeWidth={2} strokeLinecap="round" />
+          <Path d={cornerBR} fill="none" stroke={g2} strokeWidth={2} strokeLinecap="round" />
+          <Path d={cornerBL} fill="none" stroke={g2} strokeWidth={2} strokeLinecap="round" />
+
+          <Path d={flourishTL} fill="none" stroke={g} strokeWidth={0.7} opacity={0.65} />
+          <Path d={flourishTR} fill="none" stroke={g} strokeWidth={0.7} opacity={0.65} />
+          <Path d={flourishBR} fill="none" stroke={g} strokeWidth={0.7} opacity={0.65} />
+          <Path d={flourishBL} fill="none" stroke={g} strokeWidth={0.7} opacity={0.65} />
+
+          <Path d={topCenter} fill="none" stroke={g} strokeWidth={0.7} opacity={0.6} />
+          <Path d={bottomCenter} fill="none" stroke={g} strokeWidth={0.7} opacity={0.6} />
+          <Path d={sideL} fill="none" stroke={g} strokeWidth={0.8} opacity={0.7} />
+          <Path d={sideR} fill="none" stroke={g} strokeWidth={0.8} opacity={0.7} />
+
+          {sideDotsL.map((d, i) => <Circle key={`sdl${i}`} cx={d.x} cy={d.y} r={1} fill={g} opacity={0.55} />)}
+          {sideDotsR.map((d, i) => <Circle key={`sdr${i}`} cx={d.x} cy={d.y} r={1} fill={g} opacity={0.55} />)}
+
+          {topEdgeDots.map((d, i) => <Circle key={`td${i}`} cx={d.cx} cy={d.cy} r={0.8} fill={g} opacity={0.4} />)}
+          {bottomEdgeDots.map((d, i) => <Circle key={`bd${i}`} cx={d.cx} cy={d.cy} r={0.8} fill={g} opacity={0.4} />)}
+          {topEdgeDotsR.map((d, i) => <Circle key={`tdr${i}`} cx={d.cx} cy={d.cy} r={0.8} fill={g} opacity={0.4} />)}
+          {bottomEdgeDotsR.map((d, i) => <Circle key={`bdr${i}`} cx={d.cx} cy={d.cy} r={0.8} fill={g} opacity={0.4} />)}
+
+          <Circle cx={p + 1.5} cy={p + 1.5} r={1.5} fill={g} opacity={0.7} />
+          <Circle cx={w - p - 1.5} cy={p + 1.5} r={1.5} fill={g} opacity={0.7} />
+          <Circle cx={w - p - 1.5} cy={h - p - 1.5} r={1.5} fill={g} opacity={0.7} />
+          <Circle cx={p + 1.5} cy={h - p - 1.5} r={1.5} fill={g} opacity={0.7} />
+
+          <Circle cx={cx} cy={p + 7.5} r={1} fill={g} opacity={0.5} />
+          <Circle cx={cx} cy={h - p - 7.5} r={1} fill={g} opacity={0.5} />
+        </Svg>
+        <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, justifyContent: "center", alignItems: "center" }}>
+          <Text style={{ fontSize: 21, fontFamily: "ScheherazadeNew_700Bold", color: "#030303", textAlign: "center", lineHeight: 34, letterSpacing: 1 }}>
+            {name}
+          </Text>
+        </View>
+      </View>
     </View>
   );
 }
 
 export default function SurahDetailScreen() {
-  const { id } = useLocalSearchParams();
+  const { id, ayah } = useLocalSearchParams();
+  const [bookmarkPopup, setBookmarkPopup] = useState<{ ayah: any } | null>(null);
+  const [selectedBookAyah, setSelectedBookAyah] = useState<{
+    ayah: any
+    surahNumber: number
+    x: number
+    y: number
+  } | null>(null)
+  const bookScrollYRef = useRef(0)
+  const mushafLayoutRef = useRef({ x: 0, y: 0 })
+
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const theme = isDark ? Colors.dark : Colors.light;
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const audioDrivenRef = useRef(false);
-
+  const initialAyahNumber = ayah ? parseInt(ayah, 10) : null
+  console.log("Initial Ayah Number:", initialAyahNumber)
   const {
     isBookmarked, toggleBookmark,
     playQueue, pauseAudio, resumeAudio, stopAudio,
@@ -76,8 +230,9 @@ export default function SurahDetailScreen() {
 
   const flatListRef = useRef(null);
   const bookFlatListRef = useRef(null);
+  const bookScrollRef = useRef(null);
 
-  const [viewMode, setViewMode] = useState("original");
+  const [viewMode, setViewMode] = useState(DEFAULT_VIEW_MODE)
   const [ayahs, setAyahs] = useState([]);
   const [surahName, setSurahName] = useState("");
   const [surahArabicName, setSurahArabicName] = useState("");
@@ -87,8 +242,19 @@ export default function SurahDetailScreen() {
   const [bookPageIndex, setBookPageIndex] = useState(0);
 
   const surahNumber = parseInt(id || "1", 10);
+
+  const [bookSurahs, setBookSurahs] = useState([]);
+  const [loadingNextSurah, setLoadingNextSurah] = useState(false);
+  const loadedSurahsRef = useRef(new Set());
+  const [visibleBookSurah, setVisibleBookSurah] = useState(surahNumber);
+  const surahLayoutsRef = useRef({});
   const isDownloaded = surahStatus[surahNumber] === "downloaded";
   const isDownloading = surahStatus[surahNumber] === "downloading";
+  const ayahHeightsRef = useRef({})
+
+  const AYAH_CARD_HEIGHT = 180
+  const AYAH_SEPARATOR_HEIGHT = 10
+  const LIST_HEADER_HEIGHT = surahNumber !== 9 ? 140 : 90
 
   const loadSurah = async () => {
     setLoading(true);
@@ -125,9 +291,8 @@ export default function SurahDetailScreen() {
         };
       });
 
-
-      if(surahNumber!==1) {
-        combined[0].arabicText = combined[0].arabicText.replace("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ","")     
+      if (surahNumber !== 1) {
+        combined[0].arabicText = combined[0].arabicText.replace("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ", "")
       }
       setAyahs(combined);
     } catch {
@@ -137,6 +302,69 @@ export default function SurahDetailScreen() {
     }
   };
 
+  const loadSurahForBook = useCallback(async (num) => {
+    if (loadedSurahsRef.current.has(num) || num > 114) return;
+    loadedSurahsRef.current.add(num);
+    try {
+      const [arabicData, translationData, allSurahs] = await Promise.all([
+        fetchSurahArabic(num),
+        fetchSurahTranslation(num),
+        fetchSurahs(),
+      ]);
+      const surahInfo = allSurahs.find((s) => s.number === num);
+      const meta = arabicData.length > 0 && arabicData[0].surah
+        ? arabicData[0].surah
+        : surahInfo
+          ? { name: surahInfo.name, englishName: surahInfo.englishName, englishNameTranslation: surahInfo.englishNameTranslation, numberOfAyahs: surahInfo.numberOfAyahs, revelationType: surahInfo.revelationType, number: surahInfo.number }
+          : { name: "", englishName: "", englishNameTranslation: "", numberOfAyahs: 0, revelationType: "", number: num };
+
+      const combined = arabicData.map((a, i) => {
+        const localUri = getLocalAudioUri(num, a.numberInSurah);
+        return {
+          number: a.number,
+          numberInSurah: a.numberInSurah,
+          arabicText: a.text,
+          translationText: translationData[i]?.text || "",
+          audio: a.audio,
+          localAudio: localUri || undefined,
+        };
+      });
+      console.log(num)
+      if (num !== 1) {
+        console.log(combined[0])
+        combined[0].arabicText = combined[0].arabicText.replace("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ", "");
+      }
+      setBookSurahs((prev) => [...prev, { surahNumber: num, meta, ayahs: combined }]);
+    } catch (e) {
+      loadedSurahsRef.current.delete(num);
+    }
+  }, []);
+
+  const loadNextBookSurah = useCallback(async () => {
+    if (loadingNextSurah) return;
+    const lastLoaded = bookSurahs.length > 0 ? bookSurahs[bookSurahs.length - 1].surahNumber : surahNumber;
+    const nextNum = lastLoaded + 1;
+    if (nextNum > 114) return;
+    setLoadingNextSurah(true);
+    await loadSurahForBook(nextNum);
+    if (nextNum + 1 <= 114) {
+      await loadSurahForBook(nextNum + 1);
+    }
+    setLoadingNextSurah(false);
+  }, [bookSurahs, surahNumber, loadingNextSurah, loadSurahForBook]);
+
+  useEffect(() => {
+    loadedSurahsRef.current = new Set();
+    setBookSurahs([]);
+    const init = async () => {
+      await loadSurahForBook(surahNumber);
+      if (surahNumber + 1 <= 114) {
+        loadSurahForBook(surahNumber + 1);
+      }
+    };
+    init();
+  }, [surahNumber]);
+
   useEffect(() => {
     loadSurah();
     return () => {
@@ -144,6 +372,53 @@ export default function SurahDetailScreen() {
       stopAudio();
     };
   }, [surahNumber]);
+
+  useEffect(() => {
+    if (!initialAyahNumber || ayahs.length === 0 || !flatListRef.current) return;
+
+    const index = initialAyahNumber - 1;
+    if (index < 0 || index >= ayahs.length) return;
+
+    const timeout = setTimeout(() => {
+      flatListRef.current.scrollToIndex({
+        index,
+        animated: true,
+        viewPosition: 0,
+      });
+    }, 500);
+
+    return () => clearTimeout(timeout);
+  }, [ayahs, initialAyahNumber]);
+
+  // Load saved view mode when screen mounts
+  useEffect(() => {
+    const loadViewMode = async () => {
+      try {
+        const savedMode = await AsyncStorage.getItem(VIEW_MODE_KEY)
+
+        // Only apply if valid
+        if (savedMode === "original" || savedMode === "book") {
+          setViewMode(savedMode)
+        }
+      } catch (e) {
+        // If anything fails, fall back to default
+        setViewMode(DEFAULT_VIEW_MODE)
+      }
+    }
+
+    loadViewMode()
+  }, [])
+
+  // Change view mode and persist it
+  const changeViewMode = async (mode) => {
+    setViewMode(mode)
+
+    try {
+      await AsyncStorage.setItem(VIEW_MODE_KEY, mode)
+    } catch (e) {
+      // Silent fail is fine here
+    }
+  }
 
   const buildTracks = useCallback(() => {
     return ayahs
@@ -196,6 +471,12 @@ export default function SurahDetailScreen() {
     },
     [surahNumber, surahArabicName, surahEnglishName, toggleBookmark]
   );
+  // Add this helper function inside your component
+  const getItemLayout = (data, index) => ({
+    length: AYAH_CARD_HEIGHT + AYAH_SEPARATOR_HEIGHT,
+    offset: (AYAH_CARD_HEIGHT + AYAH_SEPARATOR_HEIGHT) * index + LIST_HEADER_HEIGHT,
+    index,
+  });
 
   const handleDownload = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -264,41 +545,35 @@ export default function SurahDetailScreen() {
   useEffect(() => {
   }, [currentAyahInSurah, viewMode, isThisSurahPlaying, findPageForAyah, bookPageIndex]);
 
+  const isVisibleSurahPlaying = currentTrackId ? currentTrackId.startsWith(`${visibleBookSurah}_`) : false;
+
   const handleBookPlayFromPage = useCallback(async () => {
-  audioDrivenRef.current = true;
-  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-  const tracks = buildTracks();
-  if (tracks.length === 0) return;
-
-  // Get first ayah of current page
-  const currentPageAyahs = bookPages[bookPageIndex];
-  if (!currentPageAyahs || currentPageAyahs.length === 0) return;
-
-  const firstAyahOnPage = currentPageAyahs[0].numberInSurah;
-  const startIdx = tracks.findIndex((t) => t.ayahNumberInSurah === firstAyahOnPage);
-
-  // If already playing the correct page, just pause/resume
-  if (isThisSurahPlaying && isPlaying) {
-    await pauseAudio();
-    return;
-  }
-
-  if (isThisSurahPlaying && !isPlaying) {
-    // If current track is NOT the first ayah of this page, restart from first ayah
-    const currentTrackNum = parseInt(currentTrackId?.split("_")[1] || "0", 10);
-    if (currentTrackNum !== firstAyahOnPage) {
-      await playQueue(tracks, startIdx >= 0 ? startIdx : 0);
-    } else {
-      await resumeAudio();
+    if (isVisibleSurahPlaying && isPlaying) {
+      await pauseAudio();
+      return;
     }
-    return;
-  }
 
-  // Otherwise, start playing from the first ayah of current page
-  await playQueue(tracks, startIdx >= 0 ? startIdx : 0)
-  }, [buildTracks, playQueue, bookPages, bookPageIndex, isThisSurahPlaying, isPlaying, pauseAudio, resumeAudio, currentTrackId]);
+    if (isVisibleSurahPlaying && !isPlaying) {
+      await resumeAudio();
+      return;
+    }
 
+    const surahData = bookSurahs.find((s) => s.surahNumber === visibleBookSurah);
+    if (!surahData) return;
+
+    const tracks = surahData.ayahs
+      .filter((a) => a.localAudio || a.audio)
+      .map((a) => ({
+        id: `${visibleBookSurah}_${a.numberInSurah}`,
+        uri: a.localAudio || a.audio,
+        ayahNumberInSurah: a.numberInSurah,
+      }));
+    if (tracks.length === 0) return;
+
+    await playQueue(tracks, 0);
+  }, [bookSurahs, visibleBookSurah, isVisibleSurahPlaying, isPlaying, playQueue, pauseAudio, resumeAudio]);
 
   const goToNextPage = useCallback(() => {
     if (bookPageIndex < bookPages.length - 1) {
@@ -331,55 +606,76 @@ export default function SurahDetailScreen() {
     },
   }), [goToNextPage, goToPrevPage]);
 
-  
   const prevTrackIdRef = useRef<string | null>(null)
 
-useEffect(() => {
-  if (!audioDrivenRef.current || !bookPages.length) return
+  useEffect(() => {
+    if (!audioDrivenRef.current || !bookPages.length) return
 
-  const currentPageAyahs = bookPages[bookPageIndex]
-  if (!currentPageAyahs?.length) return
+    const currentPageAyahs = bookPages[bookPageIndex]
+    if (!currentPageAyahs?.length) return
 
-  const lastAyahNumber = currentPageAyahs[currentPageAyahs.length - 1].numberInSurah
+    const lastAyahNumber = currentPageAyahs[currentPageAyahs.length - 1].numberInSurah
 
-  // Only advance if the track just finished
-  const prevTrackNum = prevTrackIdRef.current ? parseInt(prevTrackIdRef.current.split('_')[1], 10) : null
-  const currentTrackNum = currentTrackId ? parseInt(currentTrackId.split('_')[1], 10) : null
+    // Only advance if the track just finished
+    const prevTrackNum = prevTrackIdRef.current ? parseInt(prevTrackIdRef.current.split('_')[1], 10) : null
+    const currentTrackNum = currentTrackId ? parseInt(currentTrackId.split('_')[1], 10) : null
 
-  if (prevTrackNum === lastAyahNumber && currentTrackNum !== lastAyahNumber) {
-    // Last ayah finished, move to next page if available
-    if (bookPageIndex < bookPages.length - 1) {
-      setTimeout(() => {
-        if (bookPageIndex < bookPages.length - 1) {
-          goToNextPage()
-        }
-      }, 100)
+    if (prevTrackNum === lastAyahNumber && currentTrackNum !== lastAyahNumber) {
+      // Last ayah finished, move to next page if available
+      if (bookPageIndex < bookPages.length - 1) {
+        setTimeout(() => {
+          if (bookPageIndex < bookPages.length - 1) {
+            goToNextPage()
+          }
+        }, 100)
+      }
     }
-  }
 
-  prevTrackIdRef.current = currentTrackId
+    prevTrackIdRef.current = currentTrackId
   }, [currentTrackId, bookPageIndex, bookPages, goToNextPage])
 
+  const handleBookScroll = useCallback((e) => {
+    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+    const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+    if (distanceFromBottom < 1500) {
+      loadNextBookSurah();
+    }
+    const scrollY = contentOffset.y;
+    const viewportCenter = scrollY + layoutMeasurement.height / 2;
+    const layouts = surahLayoutsRef.current;
+    let found = null;
+    for (const key of Object.keys(layouts)) {
+      const { y, height } = layouts[key];
+      if (viewportCenter >= y && viewportCenter < y + height) {
+        found = parseInt(key, 10);
+        break;
+      }
+    }
+    if (found && found !== visibleBookSurah) {
+      setVisibleBookSurah(found);
+    }
+  }, [loadNextBookSurah, visibleBookSurah]);
 
-
-  const renderAyah = ({ item }) => {
-    const trackId = `${surahNumber}_${item.numberInSurah}`;
-    const isThisPlaying = currentTrackId === trackId && isPlaying;
-    const isThisLoading = currentTrackId === trackId && isLoading;
-
+  const renderAyah = ({ item, index }) => {
     return (
-      <AyahCard
-        ayah={item}
-        theme={theme}
-        isDark={isDark}
-        isBookmarked={isBookmarked(item.number)}
-        isCurrentPlaying={isThisPlaying}
-        isCurrentLoading={isThisLoading}
-        onPlayFromHere={handlePlayFromHere}
-        onBookmark={handleBookmark}
-      />
-    );
-  };
+      <View
+        onLayout={e => {
+          ayahHeightsRef.current[index] = e.nativeEvent.layout.height
+        }}
+      >
+        <AyahCard
+          ayah={item}
+          theme={theme}
+          isDark={isDark}
+          isBookmarked={isBookmarked(item.number)}
+          isCurrentPlaying={currentTrackId === `${surahNumber}_${item.numberInSurah}` && isPlaying}
+          isCurrentLoading={currentTrackId === `${surahNumber}_${item.numberInSurah}` && isLoading}
+          onPlayFromHere={handlePlayFromHere}
+          onBookmark={handleBookmark}
+        />
+      </View>
+    )
+  }
 
   if (loading) {
     return (
@@ -427,7 +723,7 @@ useEffect(() => {
             style={({ pressed }) => [
               styles.retryButton,
               {
-                backgroundColor: theme.tint,
+                backgroundColor: "#40433f",
                 opacity: pressed ? 0.8 : 1,
               },
             ]}
@@ -439,46 +735,45 @@ useEffect(() => {
     )
   }
 
-
   const toggleBar = (
     <View style={styles.toggleContainer}>
       <Pressable
-        onPress={() => setViewMode("original")}
+        onPress={() => changeViewMode("original")}
         style={[
           styles.toggleBtn,
-          viewMode === "original" && { backgroundColor: theme.tint },
+          viewMode === "original" && { backgroundColor: "#e4d2c9" },
         ]}
       >
         <Ionicons
           name="list-outline"
           size={16}
-          color={viewMode === "original" ? "#fff" : theme.textSecondary}
+          color={viewMode === "original" ? "#40433f" : "#706c67"}
         />
         <Text
           style={[
             styles.toggleText,
-            { color: viewMode === "original" ? "#fff" : theme.textSecondary },
+            { color: viewMode === "original" ? "#40433f" : "#706c67" },
           ]}
         >
           List
         </Text>
       </Pressable>
       <Pressable
-        onPress={() => setViewMode("book")}
+        onPress={() => changeViewMode("book")}
         style={[
           styles.toggleBtn,
-          viewMode === "book" && { backgroundColor: theme.tint },
+          viewMode === "book" && { backgroundColor: "#e4d2c9" },
         ]}
       >
         <Ionicons
           name="book-outline"
           size={16}
-          color={viewMode === "book" ? "#fff" : theme.textSecondary}
+          color={viewMode === "book" ? "#40433f" : "#706c67"}
         />
         <Text
           style={[
             styles.toggleText,
-            { color: viewMode === "book" ? "#fff" : theme.textSecondary },
+            { color: viewMode === "book" ? "#40433f" : "#706c67" },
           ]}
         >
           Book
@@ -489,7 +784,7 @@ useEffect(() => {
 
   if (viewMode === "book") {
     return (
-      <View style={[styles.container, { backgroundColor: "#000000" }]}>
+      <View style={[styles.container, { backgroundColor: "#fef9f3" }]}>
         <RadialGradientBg width={screenWidth} height={screenHeight} />
         <View style={[styles.topBar, { paddingTop: insets.top + 20 }]}>
           <Pressable
@@ -497,11 +792,11 @@ useEffect(() => {
             hitSlop={12}
             style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]}
           >
-            <Ionicons name="chevron-back" size={24} color="#fff" />
+            <Ionicons name="chevron-back" size={24} color="#0c0c0c" />
           </Pressable>
           <View style={styles.topBarCenter}>
-            <Text style={[styles.topBarTitle, { color: "#fff", fontFamily: "Inter_600SemiBold" }]}>
-              Surah {surahEnglishName}
+            <Text style={[styles.topBarTitle, { color: "#0c0c0c", fontFamily: "Inter_600SemiBold" }]}>
+              {(bookSurahs.find((s) => s.surahNumber === visibleBookSurah)?.meta?.name) || surahArabicName}
             </Text>
           </View>
           <View style={styles.topBarRight}>
@@ -510,79 +805,201 @@ useEffect(() => {
               hitSlop={12}
               style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]}
             >
-              {isLoading && isThisSurahPlaying ? (
-                <ActivityIndicator size="small" color="#fff" />
+              {isLoading && isVisibleSurahPlaying ? (
+                <ActivityIndicator size="small" color="#404040" />
               ) : (
                 <Ionicons
-                  name={isPlaying && isThisSurahPlaying ? "pause" : "play"}
+                  name={isPlaying && isVisibleSurahPlaying ? "pause" : "play"}
                   size={22}
-                  color="#fff"
+                  color="#4b4a49"
                 />
               )}
             </Pressable>
           </View>
         </View>
 
-        <View style={[styles.toggleRow, { borderBottomColor: "rgba(255,255,255,0.1)" }]}>
+        <View style={[styles.toggleRow, { borderBottomColor: "rgba(191,187,180,0.4)" }]}>
           {toggleBar}
         </View>
+        <ScrollView
+          ref={bookScrollRef}
+          style={styles.mushafScroll}
+          contentContainerStyle={styles.mushafContent}
+          showsVerticalScrollIndicator={false}
+          onScroll={(e) => {
+            bookScrollYRef.current = e.nativeEvent.contentOffset.y
+            handleBookScroll(e)
+          }}
+          scrollEventThrottle={16}
+        >
 
-        <FlatList
-          ref={bookFlatListRef}
-          data={bookPages}
-          horizontal
-          inverted
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={(_, index) => `page_${index}`}
-          getItemLayout={(_, index) => ({
-            length: screenWidth,
-            offset: screenWidth * index,
-            index,
-          })}
-          onScrollToIndexFailed={(info) => {
-            setTimeout(() => {
-              bookFlatListRef.current?.scrollToIndex({
-                index: info.index,
-                animated: true,
-              });
-            }, 200);
-          }}
-          onMomentumScrollEnd={(e) => {
-            const idx = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
-            setBookPageIndex(idx);
-          }}
-          renderItem={({ item: pageAyahs, index: pageIdx }) => (
-            <View style={[styles.bookPage, { width: screenWidth }]} {...panResponder.panHandlers}>
-              <View style={styles.bookPageContent}>
-                {pageIdx === 0 && surahNumber !== 9 ? (
-                  <Text style={styles.bookBismillah}>
-                    بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
-                  </Text>
-                ) : null}
-                <Text style={styles.bookArabicText}>
-                  {pageAyahs.map((ayah) => {
-                    const trackId = `${surahNumber}_${ayah.numberInSurah}`;
+
+          {bookSurahs.map((surahData, sIdx) => (
+            <View
+              key={surahData.surahNumber}
+              onLayout={(e) => {
+                surahLayoutsRef.current[surahData.surahNumber] = {
+                  y: e.nativeEvent.layout.y,
+                  height: e.nativeEvent.layout.height,
+                };
+              }}
+            >
+              {sIdx > 0 && <View style={styles.surahDivider} />}
+              <SurahBanner name={surahData.meta.name} width={screenWidth} />
+
+              {surahData.surahNumber !== 9 ? (
+                <Text style={styles.mushafBismillah}>
+                  بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
+                </Text>
+              ) : null}
+              <View
+                style={{ position: "relative", direction: "rtl" }}
+                onLayout={(e) => {
+                  mushafLayoutRef.current = e.nativeEvent.layout
+                }}
+
+              >
+
+
+                {/* Single flowing <Text> — all ayahs inline, Mushaf style */}
+                <Text style={styles.mushafArabicText}>
+                  {surahData.ayahs.map((ayah) => {
+                    const trackId = `${surahData.surahNumber}_${ayah.numberInSurah}`;
                     const isActive = currentTrackId === trackId && isPlaying;
+                    const bookmarked = isBookmarked(ayah.number);
+                    const isSelected = selectedBookAyah?.ayah.number === ayah.number;
+
+                    const longPressHandler = (e) => {
+                      if (Platform.OS !== "web") {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+                      }
+                      const { pageX, pageY } = e.nativeEvent
+
+                      const relativeX = pageX - mushafLayoutRef.current.x
+                      const relativeY =
+                        pageY -
+                        mushafLayoutRef.current.y +
+                        bookScrollYRef.current
+
+                      setSelectedBookAyah({
+                        ayah: { ...ayah, surahNumber: surahData.surahNumber },
+                        surahNumber: surahData.surahNumber,
+                        x: relativeX,
+                        y: relativeY
+                      })
+
+                    }
+
                     return (
-                      <Text key={ayah.number}>
-                        <Text style={isActive ? styles.bookArabicTextActive : undefined}>
-                          {ayah.arabicText}
-                        </Text>
-                        <Text style={styles.bookVerseMarker}> ﴿{getArabicNumber(ayah.numberInSurah)}﴾ </Text>
+                      <Text
+                        key={ayah.number}
+                        onLongPress={longPressHandler}
+                        onContextMenu={longPressHandler}
+                        onPress={() => { if (selectedBookAyah) setSelectedBookAyah(null); }}
+                        onMouseDown={Platform.OS === "web" ? () => {
+                          const t = setTimeout(longPressHandler, 400);
+                          (ayah as any)._t = t;
+                        } : undefined}
+                        delayLongPress={400}
+                        style={[
+                          isActive && styles.mushafTextActive,
+                          bookmarked && styles.mushafTextBookmarked,
+                          isSelected && styles.mushafTextSelected,
+                        ]}
+                      >
+                        {ayah.arabicText}
+                        <Text style={styles.mushafVerseMarker}>{" "}﴿{getArabicNumber(ayah.numberInSurah)}﴾{" "}</Text>
                       </Text>
+
+
                     );
                   })}
                 </Text>
-              </View>
-              <View style={styles.bookPageFooter}>
-                <Text style={styles.bookPageNumber}>
-                  {pageIdx + 1} / {bookPages.length}
-                </Text>
+
+                {selectedBookAyah && (
+                  <Pressable
+                    style={[
+                      styles.mushafBookmarkFlag,
+                      {
+                        top: selectedBookAyah.y - 190,
+                        transform: [{ translateX: -selectedBookAyah.x + 170 }]
+                      }
+                    ]}
+                    onPress={() => {
+                      toggleBookmark({
+                        ayahNumber: selectedBookAyah.ayah.number,
+                        surahNumber: selectedBookAyah.surahNumber
+                      })
+                      setSelectedBookAyah(null)
+                    }}
+                  >
+                    <Ionicons
+                      name={
+                        isBookmarked(selectedBookAyah.ayah.number)
+                          ? "bookmark"
+                          : "bookmark-outline"
+                      }
+                      size={18}
+                      color="#8C7563"
+                    />
+                  </Pressable>
+                )}
+
+
+
               </View>
             </View>
-          )}
-        />
+          ))}
+
+          {loadingNextSurah ? (
+            <View style={styles.mushafLoadingMore}>
+              <ActivityIndicator size="small" color="#706c67" />
+            </View>
+          ) : null}
+
+          <View style={{ height: 120 }} />
+        </ScrollView>
+        {bookmarkPopup && (
+          <Pressable
+            style={[StyleSheet.absoluteFill, { zIndex: 999, backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: "center" }]}
+            onPress={() => setBookmarkPopup(null)}
+          >
+            <Pressable onPress={(e) => e.stopPropagation()}>
+              <View style={styles.bookmarkPopupCard}>
+                <Text style={styles.bookmarkPopupAyahPreview} numberOfLines={3}>
+                  {bookmarkPopup.ayah.arabicText}
+                </Text>
+                <View style={styles.bookmarkPopupDivider} />
+                <Pressable
+                  onPress={() => {
+                    const { ayah } = bookmarkPopup;
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    toggleBookmark({
+                      ayahNumber: ayah.number,
+                      surahNumber: ayah.surahNumber,
+                      surahName: bookSurahs.find(s => s.surahNumber === ayah.surahNumber)?.meta?.name || surahArabicName,
+                      surahEnglishName: bookSurahs.find(s => s.surahNumber === ayah.surahNumber)?.meta?.englishName || surahEnglishName,
+                      arabicText: ayah.arabicText,
+                      translationText: ayah.translationText,
+                      numberInSurah: ayah.numberInSurah,
+                    });
+                    setBookmarkPopup(null);
+                  }}
+                  style={({ pressed }) => [styles.bookmarkPopupBtn, { opacity: pressed ? 0.6 : 1 }]}
+                >
+                  <Ionicons
+                    name={isBookmarked(bookmarkPopup.ayah.number) ? "bookmark" : "bookmark-outline"}
+                    size={20}
+                    color="#8C7563"
+                  />
+                  <Text style={styles.bookmarkPopupText}>
+                    {isBookmarked(bookmarkPopup.ayah.number) ? "Remove Bookmark" : "Bookmark Ayah"}
+                  </Text>
+                </Pressable>
+              </View>
+            </Pressable>
+          </Pressable>
+        )}
       </View>
     );
   }
@@ -639,11 +1056,23 @@ useEffect(() => {
           paddingTop: 0,
         }}
         showsVerticalScrollIndicator={false}
+        onScrollToIndexFailed={info => {
+          const averageItemHeight = 200; // rough estimate
+          const offset = info.index * averageItemHeight;
+          flatListRef.current?.scrollToOffset({ offset, animated: false });
+          setTimeout(() => {
+            flatListRef.current?.scrollToIndex({
+              index: info.index,
+              animated: true,
+              viewPosition: 0,
+            });
+          }, 300);
+        }}
         ListHeaderComponent={
           <View>
             {surahNumber !== 9 ? (
               <View style={styles.bismillah}>
-                <Text style={[styles.bismillahText, { color: "#fff" }]}>
+                <Text style={[styles.bismillahText, { color: theme.arabicText }]}>
                   بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
                 </Text>
               </View>
@@ -654,8 +1083,8 @@ useEffect(() => {
                 styles.playAllButton,
                 {
                   backgroundColor: isThisSurahPlaying
-                    ? isDark ? "rgba(46,170,138,0.15)" : "rgba(13,92,77,0.08)"
-                    : theme.tint,
+                    ? "rgba(228,210,201,0.5)"
+                    : "#e4d2c9",
                   opacity: pressed ? 0.85 : 1,
                 },
               ]}
@@ -663,11 +1092,11 @@ useEffect(() => {
               <Ionicons
                 name={isPlaying ? "pause" : "play"}
                 size={18}
-                color={isPlaying ? theme.tint : "#fff"}
+                color="#8C7563"
               />
               <Text style={[
                 styles.playAllText,
-                { color: isPlaying ? theme.tint : "#fff" },
+                { color: "#8C7563" },
               ]}>
                 {isPlaying ? "Pause" : "Play from Start"}
               </Text>
@@ -683,7 +1112,7 @@ useEffect(() => {
         <View style={[
           styles.playerBar,
           {
-            backgroundColor: isDark ? "#1A3A30" : "#0D5C4D",
+            backgroundColor: "#8C7563",
             paddingBottom: insets.bottom + webBottomInset + 8,
           },
         ]}>
@@ -697,20 +1126,20 @@ useEffect(() => {
           </View>
           <View style={styles.playerControls}>
             <Pressable onPress={skipPrev} hitSlop={10} style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}>
-              <Ionicons name="play-skip-back" size={20} color="#fff" />
+              <Ionicons name="play-skip-back" size={20} color="#fef9f3" />
             </Pressable>
             <Pressable onPress={handlePauseResume} hitSlop={10} style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}>
               {isLoading ? (
-                <ActivityIndicator size="small" color="#fff" />
+                <ActivityIndicator size="small" color="#fef9f3" />
               ) : (
-                <Ionicons name={isPlaying ? "pause-circle" : "play-circle"} size={36} color="#fff" />
+                <Ionicons name={isPlaying ? "pause-circle" : "play-circle"} size={36} color="#fef9f3" />
               )}
             </Pressable>
             <Pressable onPress={skipNext} hitSlop={10} style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}>
-              <Ionicons name="play-skip-forward" size={20} color="#fff" />
+              <Ionicons name="play-skip-forward" size={20} color="#fef9f3" />
             </Pressable>
             <Pressable onPress={stopAudio} hitSlop={10} style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1, marginLeft: 4 })}>
-              <Ionicons name="close" size={22} color="rgba(255,255,255,0.6)" />
+              <Ionicons name="close" size={22} color="rgba(254,249,243,0.6)" />
             </Pressable>
           </View>
         </View>
@@ -736,7 +1165,7 @@ function AyahCard({
       styles.ayahCard,
       {
         backgroundColor: isCurrentPlaying
-          ? isDark ? "rgba(46,170,138,0.1)" : "rgba(13,92,77,0.06)"
+          ? "rgba(228,210,201,0.4)"
           : theme.ayahBg,
         borderColor: isCurrentPlaying ? theme.tint : theme.border,
         borderWidth: isCurrentPlaying ? 1.5 : 1,
@@ -746,10 +1175,10 @@ function AyahCard({
         <View
           style={[
             styles.verseNumBadge,
-            { backgroundColor: isDark ? "rgba(46,170,138,0.12)" : "rgba(13,92,77,0.08)" },
+            { backgroundColor: "#e4d2c9" },
           ]}
         >
-          <Text style={[styles.verseNumText, { color: theme.verseNumber }]}>{ayah.numberInSurah}</Text>
+          <Text style={[styles.verseNumText, { color: "#40433f" }]}>{ayah.numberInSurah}</Text>
         </View>
         <View style={styles.ayahActions}>
           {hasAudio ? (
@@ -915,7 +1344,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   retryText: {
-    color: "#fff",
+    color: "#fef9f3",
     fontSize: 14,
     fontFamily: "Inter_600SemiBold",
   },
@@ -936,12 +1365,12 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   playerAyahText: {
-    color: "#fff",
+    color: "#fef9f3",
     fontSize: 15,
     fontFamily: "Inter_600SemiBold",
   },
   playerSurahText: {
-    color: "rgba(255,255,255,0.6)",
+    color: "rgba(254,249,243,0.7)",
     fontSize: 12,
     fontFamily: "Inter_400Regular",
     marginTop: 2,
@@ -961,104 +1390,130 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  bookTopBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-    gap: 10,
+  mushafScroll: {
+    flex: 1,
   },
-  bookPlayBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.15)",
+  mushafContent: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+  },
+  surahDivider: {
+    height: 1,
+    backgroundColor: "rgba(164,159,150,0.3)",
+    marginHorizontal: 10,
+    marginTop: 36,
+  },
+  mushafBismillah: {
+    fontSize: 26,
+    fontFamily: "ScheherazadeNew_700Bold",
+    color: "#0c0c0c",
+    textAlign: "center",
+    marginBottom: 14,
+    lineHeight: 52,
+  },
+  mushafArabicText: {
+    textAlign: Platform.OS === "web" ? "justify" : "justify",
+    fontSize: 24,
+    lineHeight: 65,
+    fontFamily: "Amiri_400Regular",
+    color: "#0c0c0c",
+    paddingHorizontal: 0,
+  },
+  mushafTextActive: {
+    backgroundColor: "#FFD5CC",
+    color: "#0c0c0c",
+  },
+  mushafVerseMarker: {
+    fontSize: 18,
+    color: "#706c67",
+    fontFamily: "Amiri_400Regular",
+  },
+  mushafLoadingMore: {
+    paddingVertical: 30,
+    alignItems: "center",
+  },
+  // 4. Add these styles to your StyleSheet.create({...}):
+  mushafTextBookmarked: {
+    color: "#8C7563",
+    backgroundColor: "rgba(140,117,99,0.12)",
+  },
+
+  bookmarkPopupOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.3)",
     justifyContent: "center",
     alignItems: "center",
   },
-  bookTopBarCenter: {
-    flex: 1,
+  bookmarkPopupCard: {
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    paddingVertical: 8,
+    width: 260,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 10,
   },
-  bookTopBarTitle: {
-    color: "#fff",
-    fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
+  bookmarkPopupAyahPreview: {
+    fontSize: 19,
+    fontFamily: "ScheherazadeNew_700Bold",
+    color: "#0c0c0c",
+    textAlign: "right",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    lineHeight: 36,
   },
-  bookTopBarSubtitle: {
-    color: "rgba(255,255,255,0.5)",
-    fontSize: 12,
-    fontFamily: "Amiri_400Regular",
-    marginTop: 1,
+  bookmarkPopupDivider: {
+    height: 1,
+    backgroundColor: "rgba(0,0,0,0.08)",
   },
-  bookPage: {
-    flex: 1,
-    justifyContent: "space-between",
+  bookmarkPopupBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
   },
-  bookPageContent: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 6,
-    overflow: "hidden",
+  bookmarkPopupText: {
+    fontSize: 15,
+    fontFamily: "Inter_500Medium",
+    color: "#40433f",
   },
-  bookBismillah: {
-    fontSize: 24,
-    fontFamily: "Amiri_700Bold",
-    color: "#fff",
-    textAlign: "center",
-    marginBottom: 14,
-    lineHeight: 65,
-  },
-  bookAyahBlock: {
-    marginBottom: 8,
-  },
-  bookArabicText: {
-    direction: "rtl",
+
+  // STEP 5 — Update styles. Remove bookmarkPopup* styles, add these:
+  mushafAyahText: {
+    writingDirection: "rtl",
     fontSize: 24,
     lineHeight: 65,
     textAlign: "justify",
     fontFamily: "Amiri_400Regular",
-    color: "rgba(255,255,255,0.92)",
+    color: "#0c0c0c",
   },
-  bookArabicTextActive: {
-    color: "#C8A951",
+  mushafTextSelected: {
+    backgroundColor: "rgba(140,117,99,0.07)",
   },
-  bookVerseMarker: {
-    fontSize: 18,
-    color: "rgba(200,169,81,0.7)",
-    fontFamily: "Amiri_400Regular",
+
+
+  mushafAyahRow: {
+    position: "relative",
+    marginBottom: 2,
   },
-  bookPageFooter: {
-    paddingBottom: 20,
-    paddingTop: 8,
-    paddingHorizontal: 20,
+  mushafBookmarkFlag: {
+    position: "absolute",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "#fef9f3",
+    borderWidth: 1,
+    borderColor: "rgba(140,117,99,0.3)",
+    zIndex: 999
   },
-  bookNavRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  bookNavBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.12)",
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    gap: 4,
-  },
-  bookNavBtnDisabled: {
-    opacity: 0.25,
-  },
-  bookNavBtnText: {
-    color: "#fff",
-    fontSize: 13,
+  mushafBookmarkFlagNum: {
+    fontSize: 11,
     fontFamily: "Inter_600SemiBold",
-  },
-  bookPageNumber: {
-    color: "rgba(255,255,255,0.5)",
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
+    color: "#8C7563",
   },
 });

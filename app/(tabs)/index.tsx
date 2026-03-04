@@ -103,7 +103,7 @@ export default function HomeScreen() {
     >
       <View style={styles.header}>
 
-        <Text style={[styles.dateText, { color: theme.textSecondary }]}>
+        <Text style={[styles.dateText, { color: "#706c67" }]}>
           {dateStr} {' '} {dateStrAr}
         </Text>
          <Text style={[styles.greeting, { color: theme.text, fontFamily: "Inter_600SemiBold" }]}>
@@ -116,11 +116,11 @@ export default function HomeScreen() {
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.tint} />
+          <ActivityIndicator size="large" color="#706c67" />
         </View>
       ) : error ? (
         <View style={styles.errorContainer}>
-          <Ionicons name="cloud-offline-outline" size={48} color={theme.textSecondary} />
+          <Ionicons name="cloud-offline-outline" size={48} color="#706c67" />
           <Text style={[styles.errorText, { color: theme.textSecondary }]}>
             Could not load the daily verse
           </Text>
@@ -128,7 +128,7 @@ export default function HomeScreen() {
             onPress={loadDailyVerse}
             style={({ pressed }) => [
               styles.retryButton,
-              { backgroundColor: theme.tint, opacity: pressed ? 0.8 : 1 },
+              { backgroundColor: "#40433f", opacity: pressed ? 0.8 : 1 },
             ]}
           >
             <Text style={styles.retryText}>Try Again</Text>
@@ -136,12 +136,7 @@ export default function HomeScreen() {
         </View>
       ) : dailyArabic && dailyTranslation ? (
         <View>
-          <LinearGradient
-            colors={isDark ? ["#0F2B23", "#1A4035"] : ["#0D5C4D", "#147A64"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.dailyCard}
-          >
+          <View style={styles.dailyCard}>
             <View style={styles.cardHeader}>
               <View style={styles.surahBadge}>
                 <Text style={styles.surahBadgeText}>
@@ -152,12 +147,12 @@ export default function HomeScreen() {
                 {dailyArabic.audio ? (
                   <Pressable onPress={handlePlayAudio} hitSlop={8}>
                     {isLoading && currentTrackId === dailyTrackId ? (
-                      <ActivityIndicator size="small" color="#fff" />
+                      <ActivityIndicator size="small" color="#4b4a49" />
                     ) : (
                       <Ionicons
                         name={isDailyPlaying ? "pause" : "play"}
                         size={22}
-                        color="#fff"
+                        color="#4b4a49"
                       />
                     )}
                   </Pressable>
@@ -166,7 +161,7 @@ export default function HomeScreen() {
                   <Ionicons
                     name={isBookmarked(dailyArabic.number) ? "bookmark" : "bookmark-outline"}
                     size={20}
-                    color="#fff"
+                    color="#4b4a49"
                   />
                 </Pressable>
               </View>
@@ -182,13 +177,13 @@ export default function HomeScreen() {
               Surah {dailyArabic.surah?.englishName} - Ayah{" "}No.{" "}
               {dailyArabic.numberInSurah}
             </Text>
-          </LinearGradient>
+          </View>
 
           <View style={styles.infoSection}>
             <Text style={[styles.infoTitle, { color: theme.text, fontFamily: "Inter_600SemiBold" }]}>
               About this Surah
             </Text>
-            <View style={[styles.infoCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <View style={[styles.infoCard, { backgroundColor: theme.card, borderColor: "#e4d2c9" }]}>
               <InfoRow
                 icon="book-outline"
                 label="Surah"
@@ -218,11 +213,11 @@ export default function HomeScreen() {
                 }}
                 style={({ pressed }) => [
                   styles.goToSurah,
-                  { borderColor: theme.border, opacity: pressed ? 0.7 : 1 },
+                  { borderColor: "#e4d2c9", opacity: pressed ? 0.7 : 1 },
                 ]}
               >
-                <Text style={[styles.goToSurahText, { color: theme.tint }]}>Go to Surah</Text>
-                <Ionicons name="chevron-forward" size={14} color={theme.tint} />
+                <Text style={[styles.goToSurahText, { color: "#40433f" }]}>Go to Surah</Text>
+                <Ionicons name="chevron-forward" size={14} color="#40433f" />
               </Pressable>
             </View>
           </View>
@@ -241,8 +236,8 @@ function InfoRow({
   return (
     <View style={styles.infoRow}>
       <View style={styles.infoRowLeft}>
-        <Ionicons name={icon} size={18} color={theme.tint} />
-        <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>{label}</Text>
+        <Ionicons name={icon} size={18} color="#8C7563" />
+        <Text style={[styles.infoLabel, { color: "#8C7563" }]}>{label}</Text>
       </View>
       <Text style={[styles.infoValue, { color: theme.text }]}>{value}</Text>
     </View>
@@ -291,7 +286,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   retryText: {
-    color: "#fff",
+    color: "#fef9f3",
     fontSize: 14,
     fontFamily: "Inter_600SemiBold",
   },
@@ -300,6 +295,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     borderRadius: 20,
     padding: 24,
+    backgroundColor: "#e4d2c9",
   },
   cardHeader: {
     flexDirection: "row",
@@ -308,13 +304,13 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   surahBadge: {
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: "rgba(64,67,63,0.12)",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
   },
   surahBadgeText: {
-    color: "#fff",
+    color: "#40433f",
     fontSize: 12,
     fontFamily: "Inter_600SemiBold",
   },
@@ -327,25 +323,25 @@ const styles = StyleSheet.create({
     fontSize: 28,
     lineHeight: 52,
     textAlign: "right",
-    color: "#fff",
+    color: "#030303",
     fontFamily: "Amiri_400Regular",
     marginBottom: 16,
   },
   divider: {
     height: 1,
-    backgroundColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(64,67,63,0.15)",
     marginBottom: 16,
   },
   translationDaily: {
     fontSize: 15,
     lineHeight: 24,
-    color: "rgba(255,255,255,0.85)",
+    color: "#40433f",
     fontFamily: "Inter_400Regular",
     marginBottom: 16,
   },
   surahRef: {
     fontSize: 12,
-    color: "rgba(255,255,255,0.5)",
+    color: "#706c67",
     fontFamily: "Inter_400Regular",
   },
   infoSection: {

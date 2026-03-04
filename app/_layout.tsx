@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { useFonts, Inter_400Regular, Inter_600SemiBold } from "@expo-google-fonts/inter";
 import { Amiri_400Regular, Amiri_700Bold } from "@expo-google-fonts/amiri";
+import { ScheherazadeNew_700Bold } from "@expo-google-fonts/scheherazade-new";
 import { queryClient } from "@/lib/query-client";
 import { QuranProvider } from "@/lib/quran-context";
 import { DownloadProvider } from "@/lib/download-context";
@@ -30,6 +31,7 @@ export default function RootLayout() {
     Inter_600SemiBold,
     Amiri_400Regular,
     Amiri_700Bold,
+    ScheherazadeNew_700Bold,
   });
 
   useEffect(() => {

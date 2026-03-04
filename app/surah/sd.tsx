@@ -309,7 +309,7 @@ export default function SurahDetailScreen() {
                 styles.playAllButton,
                 {
                   backgroundColor: isThisSurahPlaying
-                    ? isDark ? "rgba(46,170,138,0.15)" : "rgba(13,92,77,0.08)"
+                    ? "rgba(228,210,201,0.5)" 
                     : theme.tint,
                   opacity: pressed ? 0.85 : 1,
                 },
@@ -338,7 +338,7 @@ export default function SurahDetailScreen() {
         <View style={[
           styles.playerBar,
           {
-            backgroundColor: isDark ? "#1A3A30" : "#0D5C4D",
+            backgroundColor: "#40433f",
             paddingBottom: insets.bottom + webBottomInset + 8,
           },
         ]}>
@@ -391,7 +391,7 @@ function AyahCard({
       styles.ayahCard,
       {
         backgroundColor: isCurrentPlaying
-          ? isDark ? "rgba(46,170,138,0.1)" : "rgba(13,92,77,0.06)"
+          ? "rgba(228,210,201,0.3)"
           : theme.ayahBg,
         borderColor: isCurrentPlaying ? theme.tint : theme.border,
         borderWidth: isCurrentPlaying ? 1.5 : 1,
@@ -401,7 +401,7 @@ function AyahCard({
         <View
           style={[
             styles.verseNumBadge,
-            { backgroundColor: isDark ? "rgba(46,170,138,0.12)" : "rgba(13,92,77,0.08)" },
+            { backgroundColor: "rgba(228,210,201,0.4)" },
           ]}
         >
           <Text style={[styles.verseNumText, { color: theme.verseNumber }]}>{ayah.numberInSurah}</Text>

@@ -29,11 +29,11 @@ export default function BookmarksScreen() {
   if (bookmarks.length === 0) {
     return (
       <View style={[styles.emptyContainer, { backgroundColor: theme.background, paddingTop: insets.top + webTopInset }]}>
-        <Ionicons name="bookmark-outline" size={56} color={theme.textSecondary} />
+        <Ionicons name="bookmark-outline" size={56} color="#8C7563" />
         <Text style={[styles.emptyTitle, { color: theme.text, fontFamily: "Inter_600SemiBold" }]}>
           No Bookmarks Yet
         </Text>
-        <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
+        <Text style={[styles.emptyText, { color: "#8C7563" }]}>
           Save your favorite ayahs to find them here
         </Text>
       </View>
@@ -41,19 +41,13 @@ export default function BookmarksScreen() {
   }
 
   const renderBookmark = ({ item }) => (
-
-    
-    <View style={[styles.bookmarkCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-      
+    <View style={styles.bookmarkCard}>
       <View style={styles.bookmarkHeader}>
-
         <View style={styles.surahBadge}>
           <Text style={styles.surahBadgeText}>
             {item.surahEnglishName} :{getArabicNumber(item.numberInSurah)}
           </Text>
         </View>
-        
-      
         <Pressable
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -61,36 +55,33 @@ export default function BookmarksScreen() {
           }}
           hitSlop={8}
         >
-          <Ionicons name="bookmark" size={20} color='#fff' />
+          <Ionicons name="bookmark" size={20} color="#4b4a49" />
         </Pressable>
       </View>
 
-      <Text style={[styles.bookmarkArabic, { color: theme.arabicText }]}>{item.arabicText}</Text>
-        <View style={styles.divider} />
-      
-        <Text style={styles.translationDaily}>{item.translationText}</Text>
-
-        <Text style={styles.surahRef}>
-          Surah {item.surahEnglishName} - Ayah{" "}No.{" "}
-          {item.numberInSurah}
-        </Text>
+      <Text style={styles.bookmarkArabic}>{item.arabicText}</Text>
+      <View style={styles.divider} />
+      <Text style={styles.translationDaily}>{item.translationText}</Text>
+      <Text style={styles.surahRef}>
+        Surah {item.surahEnglishName} - Ayah{" "}No.{" "}
+        {item.numberInSurah}
+      </Text>
       <Pressable
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           router.push({
             pathname: "/surah/[id]",
-            params: { id: item.surahNumber.toString() },
+            params: { id: item?.surahNumber?.toString(), ayah: item.numberInSurah },
           });
         }}
         style={({ pressed }) => [
           styles.goToSurah,
-          { borderColor: theme.border, opacity: pressed ? 0.7 : 1 },
+          {  borderColor: "#8C7563", opacity: pressed ? 0.7 : 1 },
         ]}
       >
-        <Text style={[styles.goToSurahText, { color: theme.tint }]}>Go to Surah</Text>
-        <Ionicons name="chevron-forward" size={14} color={theme.tint} />
+        <Text style={styles.goToSurahText}>Go to Surah</Text>
+        <Ionicons name="chevron-forward" size={14} color="#e4d2c9" />
       </Pressable>
-
     </View>
   );
 
@@ -98,14 +89,14 @@ export default function BookmarksScreen() {
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <FlatList
         data={bookmarks}
-        keyExtractor={(item) => item.ayahNumber.toString()}
+        keyExtractor={(item) => item?.ayahNumber?.toString()}
         renderItem={renderBookmark}
         contentContainerStyle={{ paddingBottom: 120, paddingTop: insets.top + webTopInset + 16, paddingHorizontal: 16 }}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <View style={styles.listHeader}>
             <Text style={[styles.title, { color: theme.text, fontFamily: "Inter_600SemiBold" }]}>Bookmarks</Text>
-            <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
+            <Text style={[styles.subtitle, { color: "#706c67" }]}>
               {bookmarks.length} saved {bookmarks.length === 1 ? "ayah" : "ayahs"}
             </Text>
           </View>
@@ -152,8 +143,8 @@ const styles = StyleSheet.create({
   },
   bookmarkCard: {
     borderRadius: 16,
-    borderWidth: 1,
     padding: 18,
+    backgroundColor: "#e4d2c9",
   },
   bookmarkHeader: {
     flexDirection: "row",
@@ -161,67 +152,58 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 14,
   },
-  bookmarkBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  bookmarkBadgeText: {
-    fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
-  },
   bookmarkArabic: {
     fontSize: 24,
     lineHeight: 44,
     textAlign: "right",
     fontFamily: "Amiri_400Regular",
     marginBottom: 12,
-  },
-  bookmarkTranslation: {
-    fontSize: 14,
-    lineHeight: 22,
-    fontFamily: "Inter_400Regular",
-    marginBottom: 14,
+    color: "#030303",
   },
   goToSurah: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 10,
     borderRadius: 10,
     borderWidth: 1,
     gap: 4,
+    width: "90%",
+    alignSelf: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginBottom: 12
   },
-  goToSurahText: {
+   goToSurahText: {
     fontSize: 13,
     fontFamily: "Inter_600SemiBold",
   },
-   surahBadge: {
-    backgroundColor: "rgba(255,255,255,0.15)",
+  surahBadge: {
+    backgroundColor: "rgba(228,210,201,0.15)",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
   },
   surahBadgeText: {
-    color: "#fff",
+    color: "#e4d2c9",
     fontSize: 12,
     fontFamily: "Inter_600SemiBold",
   },
-    divider: {
+  divider: {
     height: 1,
-    backgroundColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(64,67,63,0.15)",
     marginBottom: 16,
   },
-    translationDaily: {
+  translationDaily: {
     fontSize: 15,
     lineHeight: 24,
-    color: "rgba(255,255,255,0.85)",
+    color: "#40433f",
     fontFamily: "Inter_400Regular",
     marginBottom: 16,
   },
   surahRef: {
     fontSize: 12,
-    color: "rgba(255,255,255,0.5)",
+    color: "#706c67",
     fontFamily: "Inter_400Regular",
-     marginBottom: 16,
+    marginBottom: 16
   },
 });
