@@ -59,7 +59,10 @@ export default function BookmarksScreen() {
         </Pressable>
       </View>
 
-      <Text style={styles.bookmarkArabic}>{item.arabicText}</Text>
+<View style={{direction: "rtl"}}>
+        <Text style={styles.bookmarkArabic}>{item.arabicText}</Text>
+
+</View>
       <View style={styles.divider} />
       <Text style={styles.translationDaily}>{item.translationText}</Text>
       <Text style={styles.surahRef}>
@@ -155,10 +158,11 @@ const styles = StyleSheet.create({
   bookmarkArabic: {
     fontSize: 24,
     lineHeight: 44,
-    textAlign: "right",
+    textAlign: "justify",
     fontFamily: "Amiri_400Regular",
     marginBottom: 12,
     color: "#030303",
+    writingDirection: "rtl"
   },
   goToSurah: {
     flexDirection: "row",
@@ -199,6 +203,7 @@ const styles = StyleSheet.create({
     color: "#40433f",
     fontFamily: "Inter_400Regular",
     marginBottom: 16,
+    textAlign: "justify",
   },
   surahRef: {
     fontSize: 12,

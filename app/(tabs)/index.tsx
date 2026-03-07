@@ -57,7 +57,7 @@ export default function HomeScreen() {
     day: "numeric",
   });
 
-    const dateStrAr = today.toLocaleDateString("ar-SA", {
+  const dateStrAr = today.toLocaleDateString("ar-SA", {
     weekday: "long",
     year: "numeric",
     month: "long",
@@ -106,8 +106,8 @@ export default function HomeScreen() {
         <Text style={[styles.dateText, { color: "#706c67" }]}>
           {dateStr} {' '} {dateStrAr}
         </Text>
-         <Text style={[styles.greeting, { color: theme.text, fontFamily: "Inter_600SemiBold" }]}>
-         Assalam o Alaikum
+        <Text style={[styles.greeting, { color: theme.text, fontFamily: "Inter_600SemiBold" }]}>
+          Assalam o Alaikum
         </Text>
         <Text style={[styles.greeting, { color: theme.text, fontFamily: "Inter_600SemiBold" }]}>
           Verse of the Day
@@ -171,12 +171,15 @@ export default function HomeScreen() {
 
             <View style={styles.divider} />
 
-            <Text style={styles.translationDaily}>{dailyTranslation.text}</Text>
+            <View style={{ direction: "ltr" }}>
+              <Text style={styles.translationDaily}>{dailyTranslation.text}</Text>
+              <Text style={styles.surahRef}>
+                Surah {dailyArabic.surah?.englishName} - Ayah{" "}No.{" "}
+                {dailyArabic.numberInSurah}
+              </Text>
+            </View>
 
-            <Text style={styles.surahRef}>
-              Surah {dailyArabic.surah?.englishName} - Ayah{" "}No.{" "}
-              {dailyArabic.numberInSurah}
-            </Text>
+
           </View>
 
           <View style={styles.infoSection}>
@@ -295,6 +298,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     borderRadius: 20,
     padding: 24,
+    direction: "rtl",
     backgroundColor: "#e4d2c9",
   },
   cardHeader: {
@@ -322,10 +326,12 @@ const styles = StyleSheet.create({
   arabicDaily: {
     fontSize: 28,
     lineHeight: 52,
-    textAlign: "right",
+    textAlign: "justify",
     color: "#030303",
     fontFamily: "Amiri_400Regular",
     marginBottom: 16,
+      writingDirection: "rtl",   // required for iOS
+
   },
   divider: {
     height: 1,
@@ -338,6 +344,7 @@ const styles = StyleSheet.create({
     color: "#40433f",
     fontFamily: "Inter_400Regular",
     marginBottom: 16,
+    textAlign: "justify",
   },
   surahRef: {
     fontSize: 12,
@@ -381,7 +388,7 @@ const styles = StyleSheet.create({
     textAlign: "right",
     maxWidth: "55%",
   },
-    goToSurah: {
+  goToSurah: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
-import { StyleSheet, Text, View, FlatList, Pressable, ActivityIndicator, useColorScheme, Platform, useWindowDimensions, ScrollView, PanResponder } from "react-native";
+import { StyleSheet, Text, View, FlatList, Pressable, ActivityIndicator, useColorScheme, Platform, useWindowDimensions, ScrollView, PanResponder, InteractionManager } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
@@ -11,7 +11,14 @@ import { useQuran, AudioTrack } from "@/lib/quran-context";
 import { useDownload } from "@/lib/download-context";
 import AsyncStorage from "@react-native-async-storage/async-storage"
 const VIEW_MODE_KEY = "surah_view_mode"
-const DEFAULT_VIEW_MODE = "original" // list view
+const DEFAULT_VIEW_MODE = "original"
+
+function safeHaptic(style = Haptics.ImpactFeedbackStyle.Medium) {
+  if (Platform.OS === "web") return;
+  try {
+    Haptics.impactAsync(style);
+  } catch (_) {}
+}
 
 function RadialGradientBg({ width, height }: { width: number; height: number }) {
   return (
@@ -19,7 +26,7 @@ function RadialGradientBg({ width, height }: { width: number; height: number }) 
   );
 }
 
-function SurahBanner({ name, width }: { name: string; width: number }) {
+const SurahBanner = React.memo(function SurahBanner({ name, width }) {
   const w = width - 32;
   const h = 56;
   const g = "#8C7563";
@@ -197,7 +204,173 @@ function SurahBanner({ name, width }: { name: string; width: number }) {
       </View>
     </View>
   );
-}
+})
+
+const MushafAyahSpan = React.memo(function MushafAyahSpan({
+  ayah,
+  isActive,
+  isBookmarked,
+  isSelected,
+}) {
+  return (
+    <Text
+      style={[
+        isActive && styles.mushafTextActive,
+        isBookmarked && styles.mushafTextBookmarked,
+        isSelected && styles.mushafTextSelected,
+      ]}
+    >
+      {ayah.arabicText}
+      <Text style={styles.mushafVerseMarker}>
+        {" "}﴿{getArabicNumber(ayah.numberInSurah)}﴾{" "}
+      </Text>
+    </Text>
+  );
+}, (prev, next) => {
+  return (
+    prev.isActive === next.isActive &&
+    prev.isBookmarked === next.isBookmarked &&
+    prev.isSelected === next.isSelected
+  );
+});
+
+const MushafAyahsTextBlock = React.memo(function MushafAyahsTextBlock({
+  ayahs, surahNumber, currentTrackId, isPlaying, bookmarkedSet, selectedAyahNumber,
+}) {
+  return (
+    <Text style={styles.mushafArabicText}>
+      {ayahs.map((ayah) => {
+        const trackId = `${surahNumber}_${ayah.numberInSurah}`;
+        return (
+          <MushafAyahSpan
+            key={ayah.number}
+            ayah={ayah}
+            isActive={currentTrackId === trackId && isPlaying}
+            isBookmarked={bookmarkedSet.has(ayah.number)}
+            isSelected={selectedAyahNumber === ayah.number}
+          />
+        );
+      })}
+    </Text>
+  );
+}, (prev, next) => {
+  if (prev.ayahs !== next.ayahs) return false;
+  if (prev.isPlaying !== next.isPlaying) return false;
+  if (prev.bookmarkedSet !== next.bookmarkedSet) return false;
+  if (prev.selectedAyahNumber !== next.selectedAyahNumber) return false;
+  const prevHasTrack = prev.currentTrackId?.startsWith(`${prev.surahNumber}_`);
+  const nextHasTrack = next.currentTrackId?.startsWith(`${next.surahNumber}_`);
+  if (prevHasTrack || nextHasTrack) {
+    if (prev.currentTrackId !== next.currentTrackId) return false;
+  }
+  return true;
+});
+
+const MushafSurahBlock = React.memo(function MushafSurahBlock({
+  surahData, sIdx, screenWidth, currentTrackId, isPlaying,
+  bookmarkedSet, selectedBookAyahNumber, selectedBookAyahX, selectedBookAyahY,
+  selectedBookAyahSurah, onBookmarkFlag, onLongPress, onDismissSelection,
+}) {
+  const isSelectedSurah = selectedBookAyahSurah === surahData.surahNumber;
+  const textBlockRef = useRef(null);
+
+  const handleLongPress = useCallback((e) => {
+    if (!onLongPress) return;
+    try {
+      const locX = e?.nativeEvent?.locationX ?? 0;
+      const locY = e?.nativeEvent?.locationY ?? 0;
+      const lineHeight = 65;
+      const estimatedLine = Math.floor(locY / lineHeight);
+
+      let charsSoFar = 0;
+      const textWidth = screenWidth - 40;
+      const charsPerLine = Math.max(1, Math.floor(textWidth / 6.1));
+      let foundAyah = surahData.ayahs[0];
+
+      for (let i = 0; i < surahData.ayahs.length; i++) {
+        const ayahText = `${surahData.ayahs[i].arabicText} ﴿${getArabicNumber(surahData.ayahs[i].numberInSurah)}﴾ `;
+        charsSoFar += ayahText.length;
+        const linesUsed = Math.ceil(charsSoFar / charsPerLine);
+        if (linesUsed > estimatedLine) {
+          foundAyah = surahData.ayahs[i];
+          break;
+        }
+        if (i === surahData.ayahs.length - 1) {
+          foundAyah = surahData.ayahs[i];
+        }
+      }
+
+      onLongPress(foundAyah, locX, locY, surahData.surahNumber);
+    } catch (_) {}
+  }, [onLongPress, surahData, screenWidth]);
+
+  return (
+    <View>
+      {sIdx > 0 && <View style={styles.surahDivider} />}
+      <SurahBanner name={surahData.meta.name} width={screenWidth} />
+      {surahData.surahNumber !== 9 && (
+        <Text style={styles.mushafBismillah}>
+          بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
+        </Text>
+      )}
+      <View style={{ position: "relative", direction: "rtl" }}>
+        <Pressable
+          ref={textBlockRef}
+          onLongPress={handleLongPress}
+          onPress={onDismissSelection}
+          delayLongPress={400}
+          style={{ direction: "rtl" }}
+        >
+          <MushafAyahsTextBlock
+            ayahs={surahData.ayahs}
+            surahNumber={surahData.surahNumber}
+            currentTrackId={currentTrackId}
+            isPlaying={isPlaying}
+            bookmarkedSet={bookmarkedSet}
+            selectedAyahNumber={isSelectedSurah ? selectedBookAyahNumber : null}
+          />
+        </Pressable>
+        {isSelectedSurah && selectedBookAyahNumber != null && (
+          <Pressable
+            style={[styles.mushafBookmarkFlag, { left: selectedBookAyahX - 10, top: selectedBookAyahY - 40 }]}
+            onPress={onBookmarkFlag}
+            hitSlop={12}
+          >
+            <Ionicons
+              name={bookmarkedSet.has(selectedBookAyahNumber) ? "bookmark" : "bookmark-outline"}
+              size={18}
+              color="#8C7563"
+            />
+          </Pressable>
+        )}
+      </View>
+    </View>
+  );
+}, (prev, next) => {
+  if (prev.surahData !== next.surahData) return false;
+  if (prev.sIdx !== next.sIdx) return false;
+  if (prev.screenWidth !== next.screenWidth) return false;
+  if (prev.isPlaying !== next.isPlaying) return false;
+  if (prev.bookmarkedSet !== next.bookmarkedSet) return false;
+  if (prev.onLongPress !== next.onLongPress) return false;
+
+  const prevHasTrack = prev.currentTrackId?.startsWith(`${prev.surahData.surahNumber}_`);
+  const nextHasTrack = next.currentTrackId?.startsWith(`${next.surahData.surahNumber}_`);
+  if (prevHasTrack || nextHasTrack) {
+    if (prev.currentTrackId !== next.currentTrackId) return false;
+  }
+
+  const prevIsSelected = prev.selectedBookAyahSurah === prev.surahData.surahNumber;
+  const nextIsSelected = next.selectedBookAyahSurah === next.surahData.surahNumber;
+  if (prevIsSelected || nextIsSelected) {
+    if (prev.selectedBookAyahNumber !== next.selectedBookAyahNumber) return false;
+    if (prev.selectedBookAyahX !== next.selectedBookAyahX) return false;
+    if (prev.selectedBookAyahY !== next.selectedBookAyahY) return false;
+    if (prev.selectedBookAyahSurah !== next.selectedBookAyahSurah) return false;
+  }
+
+  return true;
+});
 
 export default function SurahDetailScreen() {
   const { id, ayah } = useLocalSearchParams();
@@ -218,7 +391,6 @@ export default function SurahDetailScreen() {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const audioDrivenRef = useRef(false);
   const initialAyahNumber = ayah ? parseInt(ayah, 10) : null
-  console.log("Initial Ayah Number:", initialAyahNumber)
   const {
     isBookmarked, toggleBookmark,
     playQueue, pauseAudio, resumeAudio, stopAudio,
@@ -291,8 +463,9 @@ export default function SurahDetailScreen() {
         };
       });
 
-      if (surahNumber !== 1) {
-        combined[0].arabicText = combined[0].arabicText.replace("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ", "")
+      combined[0].arabicText = combined[0].arabicText.replace("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ", "")
+      if (surahNumber === 1) {
+        combined.splice(0, 1);
       }
       setAyahs(combined);
     } catch {
@@ -329,10 +502,12 @@ export default function SurahDetailScreen() {
           localAudio: localUri || undefined,
         };
       });
-      console.log(num)
       if (num !== 1) {
-        console.log(combined[0])
-        combined[0].arabicText = combined[0].arabicText.replace("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ", "");
+        combined[0].arabicText = combined[0].arabicText.replace("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ", "");
+      }
+
+      if (num === 1) {
+        combined.splice(0, 1);
       }
       setBookSurahs((prev) => [...prev, { surahNumber: num, meta, ayahs: combined }]);
     } catch (e) {
@@ -390,18 +565,14 @@ export default function SurahDetailScreen() {
     return () => clearTimeout(timeout);
   }, [ayahs, initialAyahNumber]);
 
-  // Load saved view mode when screen mounts
   useEffect(() => {
     const loadViewMode = async () => {
       try {
         const savedMode = await AsyncStorage.getItem(VIEW_MODE_KEY)
-
-        // Only apply if valid
         if (savedMode === "original" || savedMode === "book") {
           setViewMode(savedMode)
         }
       } catch (e) {
-        // If anything fails, fall back to default
         setViewMode(DEFAULT_VIEW_MODE)
       }
     }
@@ -409,14 +580,12 @@ export default function SurahDetailScreen() {
     loadViewMode()
   }, [])
 
-  // Change view mode and persist it
   const changeViewMode = async (mode) => {
     setViewMode(mode)
 
     try {
       await AsyncStorage.setItem(VIEW_MODE_KEY, mode)
     } catch (e) {
-      // Silent fail is fine here
     }
   }
 
@@ -431,7 +600,7 @@ export default function SurahDetailScreen() {
   }, [ayahs, surahNumber]);
 
   const handlePlayFromStart = useCallback(async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    safeHaptic(Haptics.ImpactFeedbackStyle.Medium);
     const tracks = buildTracks();
     if (tracks.length > 0) {
       await playQueue(tracks, 0);
@@ -439,7 +608,7 @@ export default function SurahDetailScreen() {
   }, [buildTracks, playQueue]);
 
   const handlePlayFromHere = useCallback(async (ayah) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    safeHaptic(Haptics.ImpactFeedbackStyle.Light);
     const tracks = buildTracks();
     const startIdx = tracks.findIndex((t) => t.ayahNumberInSurah === ayah.numberInSurah);
     if (startIdx >= 0) {
@@ -448,7 +617,7 @@ export default function SurahDetailScreen() {
   }, [buildTracks, playQueue]);
 
   const handlePauseResume = useCallback(async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    safeHaptic(Haptics.ImpactFeedbackStyle.Light);
     if (isPlaying) {
       await pauseAudio();
     } else {
@@ -458,7 +627,7 @@ export default function SurahDetailScreen() {
 
   const handleBookmark = useCallback(
     (ayah) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      safeHaptic(Haptics.ImpactFeedbackStyle.Light);
       toggleBookmark({
         ayahNumber: ayah.number,
         surahNumber,
@@ -471,7 +640,6 @@ export default function SurahDetailScreen() {
     },
     [surahNumber, surahArabicName, surahEnglishName, toggleBookmark]
   );
-  // Add this helper function inside your component
   const getItemLayout = (data, index) => ({
     length: AYAH_CARD_HEIGHT + AYAH_SEPARATOR_HEIGHT,
     offset: (AYAH_CARD_HEIGHT + AYAH_SEPARATOR_HEIGHT) * index + LIST_HEADER_HEIGHT,
@@ -479,13 +647,16 @@ export default function SurahDetailScreen() {
   });
 
   const handleDownload = useCallback(async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    safeHaptic(Haptics.ImpactFeedbackStyle.Medium);
     await downloadSurah(surahNumber);
     loadSurah();
   }, [surahNumber, downloadSurah]);
 
   const isThisSurahPlaying = currentTrackId?.startsWith(`${surahNumber}_`) ?? false;
-
+  const visibleBookSurahName = useMemo(() =>
+    bookSurahs.find((s) => s.surahNumber === visibleBookSurah)?.meta?.name || surahArabicName,
+    [bookSurahs, visibleBookSurah, surahArabicName]
+  );
   const webTopInset = Platform.OS === "web" ? 67 : 0;
   const webBottomInset = Platform.OS === "web" ? 34 : 0;
 
@@ -542,13 +713,10 @@ export default function SurahDetailScreen() {
     return 0;
   }, [bookPages]);
 
-  useEffect(() => {
-  }, [currentAyahInSurah, viewMode, isThisSurahPlaying, findPageForAyah, bookPageIndex]);
-
   const isVisibleSurahPlaying = currentTrackId ? currentTrackId.startsWith(`${visibleBookSurah}_`) : false;
 
   const handleBookPlayFromPage = useCallback(async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    safeHaptic(Haptics.ImpactFeedbackStyle.Medium);
 
     if (isVisibleSurahPlaying && isPlaying) {
       await pauseAudio();
@@ -616,12 +784,10 @@ export default function SurahDetailScreen() {
 
     const lastAyahNumber = currentPageAyahs[currentPageAyahs.length - 1].numberInSurah
 
-    // Only advance if the track just finished
     const prevTrackNum = prevTrackIdRef.current ? parseInt(prevTrackIdRef.current.split('_')[1], 10) : null
     const currentTrackNum = currentTrackId ? parseInt(currentTrackId.split('_')[1], 10) : null
 
     if (prevTrackNum === lastAyahNumber && currentTrackNum !== lastAyahNumber) {
-      // Last ayah finished, move to next page if available
       if (bookPageIndex < bookPages.length - 1) {
         setTimeout(() => {
           if (bookPageIndex < bookPages.length - 1) {
@@ -634,12 +800,111 @@ export default function SurahDetailScreen() {
     prevTrackIdRef.current = currentTrackId
   }, [currentTrackId, bookPageIndex, bookPages, goToNextPage])
 
-  const handleBookScroll = useCallback((e) => {
-    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
-    const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
-    if (distanceFromBottom < 1500) {
-      loadNextBookSurah();
+  const visibleBookSurahRef = useRef(visibleBookSurah);
+  useEffect(() => {
+    visibleBookSurahRef.current = visibleBookSurah;
+  }, [visibleBookSurah]);
+
+  const selectedBookAyahRef = useRef(selectedBookAyah);
+  useEffect(() => {
+    selectedBookAyahRef.current = selectedBookAyah;
+  }, [selectedBookAyah]);
+
+  const bookSurahsRef = useRef(bookSurahs);
+  useEffect(() => {
+    bookSurahsRef.current = bookSurahs;
+  }, [bookSurahs]);
+
+  const handleBookmarkFlag = useCallback(() => {
+    const sel = selectedBookAyahRef.current;
+    if (!sel) return;
+    const currentBookSurahs = bookSurahsRef.current;
+    toggleBookmark({
+      ayahNumber: sel.ayah.number,
+      surahNumber: sel.surahNumber,
+      surahName: currentBookSurahs.find(s => s.surahNumber === sel.surahNumber)?.meta?.name || surahArabicName,
+      surahEnglishName: currentBookSurahs.find(s => s.surahNumber === sel.surahNumber)?.meta?.englishName || surahEnglishName,
+      arabicText: sel.ayah.arabicText,
+      translationText: sel.ayah.translationText,
+      numberInSurah: sel.ayah.numberInSurah,
+    });
+    setSelectedBookAyah(null);
+  }, [toggleBookmark, surahArabicName, surahEnglishName]);
+
+  const bookmarkedSet = useMemo(() => {
+    const set = new Set();
+    for (const surahData of bookSurahs) {
+      for (const ayah of surahData.ayahs) {
+        if (isBookmarked(ayah.number)) {
+          set.add(ayah.number);
+        }
+      }
     }
+    return set;
+  }, [bookSurahs, isBookmarked]);
+
+
+  const renderAyah = useCallback(({ item, index }) => {
+    return (
+      <AyahCard
+        ayah={item}
+        theme={theme}
+        isDark={isDark}
+        isBookmarked={isBookmarked(item.number)}
+        isCurrentPlaying={currentTrackId === `${surahNumber}_${item.numberInSurah}` && isPlaying}
+        isCurrentLoading={currentTrackId === `${surahNumber}_${item.numberInSurah}` && isLoading}
+        onPlayFromHere={handlePlayFromHere}
+        onBookmark={handleBookmark}
+      />
+    );
+  }, [theme, isDark, isBookmarked, currentTrackId, surahNumber, isPlaying, isLoading, handlePlayFromHere, handleBookmark]);
+
+  const longPressHandler = useCallback((ayah, locX, locY, sNum) => {
+    try {
+      const newSelection = {
+        ayah: { ...ayah },
+        surahNumber: sNum,
+        x: locX,
+        y: locY,
+      };
+      safeHaptic(Haptics.ImpactFeedbackStyle.Medium);
+      InteractionManager.runAfterInteractions(() => {
+        setSelectedBookAyah(newSelection);
+      });
+    } catch (_) {}
+  }, []);
+
+  const dismissSelection = useCallback(() => {
+    if (selectedBookAyahRef.current) {
+      setSelectedBookAyah(null);
+    }
+  }, []);
+
+  const renderBookSurahItem = useCallback(({ item: surahData, index: sIdx }) => {
+    return (
+      <MushafSurahBlock
+        surahData={surahData}
+        sIdx={sIdx}
+        screenWidth={screenWidth}
+        currentTrackId={currentTrackId}
+        isPlaying={isPlaying}
+        bookmarkedSet={bookmarkedSet}
+        selectedBookAyahNumber={selectedBookAyah?.surahNumber === surahData.surahNumber ? selectedBookAyah?.ayah.number : null}
+        selectedBookAyahX={selectedBookAyah?.surahNumber === surahData.surahNumber ? selectedBookAyah?.x : 0}
+        selectedBookAyahY={selectedBookAyah?.surahNumber === surahData.surahNumber ? selectedBookAyah?.y : 0}
+        selectedBookAyahSurah={selectedBookAyah?.surahNumber ?? null}
+        onBookmarkFlag={handleBookmarkFlag}
+        onLongPress={longPressHandler}
+        onDismissSelection={dismissSelection}
+      />
+    );
+  }, [screenWidth, currentTrackId, isPlaying, bookmarkedSet, selectedBookAyah, handleBookmarkFlag, longPressHandler, dismissSelection]);
+
+  const bookSurahKeyExtractor = useCallback((item) => item.surahNumber.toString(), []);
+
+  const handleBookFlatListScroll = useCallback((e) => {
+    bookScrollYRef.current = e.nativeEvent.contentOffset.y;
+    const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
     const scrollY = contentOffset.y;
     const viewportCenter = scrollY + layoutMeasurement.height / 2;
     const layouts = surahLayoutsRef.current;
@@ -651,31 +916,11 @@ export default function SurahDetailScreen() {
         break;
       }
     }
-    if (found && found !== visibleBookSurah) {
+    if (found && found !== visibleBookSurahRef.current) {
       setVisibleBookSurah(found);
     }
-  }, [loadNextBookSurah, visibleBookSurah]);
+  }, []);
 
-  const renderAyah = ({ item, index }) => {
-    return (
-      <View
-        onLayout={e => {
-          ayahHeightsRef.current[index] = e.nativeEvent.layout.height
-        }}
-      >
-        <AyahCard
-          ayah={item}
-          theme={theme}
-          isDark={isDark}
-          isBookmarked={isBookmarked(item.number)}
-          isCurrentPlaying={currentTrackId === `${surahNumber}_${item.numberInSurah}` && isPlaying}
-          isCurrentLoading={currentTrackId === `${surahNumber}_${item.numberInSurah}` && isLoading}
-          onPlayFromHere={handlePlayFromHere}
-          onBookmark={handleBookmark}
-        />
-      </View>
-    )
-  }
 
   if (loading) {
     return (
@@ -688,7 +933,6 @@ export default function SurahDetailScreen() {
   if (error) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        {/* Top bar – SAME position as everywhere else */}
         <View style={[styles.topBar, { paddingTop: insets.top + 20 }]}>
           <Pressable
             onPress={() => router.back()}
@@ -701,12 +945,10 @@ export default function SurahDetailScreen() {
             <Ionicons name="chevron-back" size={24} color={theme.text} />
           </Pressable>
 
-          {/* Keeps title spacing consistent */}
           <View style={styles.topBarCenter} />
           <View style={styles.topBarRight} />
         </View>
 
-        {/* Error content */}
         <View style={styles.centered}>
           <Ionicons
             name="cloud-offline-outline"
@@ -796,7 +1038,7 @@ export default function SurahDetailScreen() {
           </Pressable>
           <View style={styles.topBarCenter}>
             <Text style={[styles.topBarTitle, { color: "#0c0c0c", fontFamily: "Inter_600SemiBold" }]}>
-              {(bookSurahs.find((s) => s.surahNumber === visibleBookSurah)?.meta?.name) || surahArabicName}
+              {visibleBookSurahName}
             </Text>
           </View>
           <View style={styles.topBarRight}>
@@ -821,144 +1063,33 @@ export default function SurahDetailScreen() {
         <View style={[styles.toggleRow, { borderBottomColor: "rgba(191,187,180,0.4)" }]}>
           {toggleBar}
         </View>
-        <ScrollView
+        <FlatList
           ref={bookScrollRef}
-          style={styles.mushafScroll}
+          data={bookSurahs}
+          keyExtractor={bookSurahKeyExtractor}
+          renderItem={renderBookSurahItem}
           contentContainerStyle={styles.mushafContent}
           showsVerticalScrollIndicator={false}
-          onScroll={(e) => {
-            bookScrollYRef.current = e.nativeEvent.contentOffset.y
-            handleBookScroll(e)
-          }}
-          scrollEventThrottle={16}
-        >
-
-
-          {bookSurahs.map((surahData, sIdx) => (
-            <View
-              key={surahData.surahNumber}
-              onLayout={(e) => {
-                surahLayoutsRef.current[surahData.surahNumber] = {
-                  y: e.nativeEvent.layout.y,
-                  height: e.nativeEvent.layout.height,
-                };
-              }}
-            >
-              {sIdx > 0 && <View style={styles.surahDivider} />}
-              <SurahBanner name={surahData.meta.name} width={screenWidth} />
-
-              {surahData.surahNumber !== 9 ? (
-                <Text style={styles.mushafBismillah}>
-                  بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
-                </Text>
+          removeClippedSubviews={Platform.OS !== 'web'}
+          windowSize={3}
+          maxToRenderPerBatch={1}
+          initialNumToRender={1}
+          updateCellsBatchingPeriod={100}
+          onScroll={handleBookFlatListScroll}
+          scrollEventThrottle={32}
+          onEndReached={loadNextBookSurah}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            <>
+              {loadingNextSurah ? (
+                <View style={styles.mushafLoadingMore}>
+                  <ActivityIndicator size="small" color="#706c67" />
+                </View>
               ) : null}
-              <View
-                style={{ position: "relative", direction: "rtl" }}
-                onLayout={(e) => {
-                  mushafLayoutRef.current = e.nativeEvent.layout
-                }}
-
-              >
-
-
-                {/* Single flowing <Text> — all ayahs inline, Mushaf style */}
-                <Text style={styles.mushafArabicText}>
-                  {surahData.ayahs.map((ayah) => {
-                    const trackId = `${surahData.surahNumber}_${ayah.numberInSurah}`;
-                    const isActive = currentTrackId === trackId && isPlaying;
-                    const bookmarked = isBookmarked(ayah.number);
-                    const isSelected = selectedBookAyah?.ayah.number === ayah.number;
-
-                    const longPressHandler = (e) => {
-                      if (Platform.OS !== "web") {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-                      }
-                      const { pageX, pageY } = e.nativeEvent
-
-                      const relativeX = pageX - mushafLayoutRef.current.x
-                      const relativeY =
-                        pageY -
-                        mushafLayoutRef.current.y +
-                        bookScrollYRef.current
-
-                      setSelectedBookAyah({
-                        ayah: { ...ayah, surahNumber: surahData.surahNumber },
-                        surahNumber: surahData.surahNumber,
-                        x: relativeX,
-                        y: relativeY
-                      })
-
-                    }
-
-                    return (
-                      <Text
-                        key={ayah.number}
-                        onLongPress={longPressHandler}
-                        onContextMenu={longPressHandler}
-                        onPress={() => { if (selectedBookAyah) setSelectedBookAyah(null); }}
-                        onMouseDown={Platform.OS === "web" ? () => {
-                          const t = setTimeout(longPressHandler, 400);
-                          (ayah as any)._t = t;
-                        } : undefined}
-                        delayLongPress={400}
-                        style={[
-                          isActive && styles.mushafTextActive,
-                          bookmarked && styles.mushafTextBookmarked,
-                          isSelected && styles.mushafTextSelected,
-                        ]}
-                      >
-                        {ayah.arabicText}
-                        <Text style={styles.mushafVerseMarker}>{" "}﴿{getArabicNumber(ayah.numberInSurah)}﴾{" "}</Text>
-                      </Text>
-
-
-                    );
-                  })}
-                </Text>
-
-                {selectedBookAyah && (
-                  <Pressable
-                    style={[
-                      styles.mushafBookmarkFlag,
-                      {
-                        top: selectedBookAyah.y - 190,
-                        transform: [{ translateX: -selectedBookAyah.x + 170 }]
-                      }
-                    ]}
-                    onPress={() => {
-                      toggleBookmark({
-                        ayahNumber: selectedBookAyah.ayah.number,
-                        surahNumber: selectedBookAyah.surahNumber
-                      })
-                      setSelectedBookAyah(null)
-                    }}
-                  >
-                    <Ionicons
-                      name={
-                        isBookmarked(selectedBookAyah.ayah.number)
-                          ? "bookmark"
-                          : "bookmark-outline"
-                      }
-                      size={18}
-                      color="#8C7563"
-                    />
-                  </Pressable>
-                )}
-
-
-
-              </View>
-            </View>
-          ))}
-
-          {loadingNextSurah ? (
-            <View style={styles.mushafLoadingMore}>
-              <ActivityIndicator size="small" color="#706c67" />
-            </View>
-          ) : null}
-
-          <View style={{ height: 120 }} />
-        </ScrollView>
+              <View style={{ height: 120 }} />
+            </>
+          }
+        />
         {bookmarkPopup && (
           <Pressable
             style={[StyleSheet.absoluteFill, { zIndex: 999, backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: "center" }]}
@@ -973,7 +1104,7 @@ export default function SurahDetailScreen() {
                 <Pressable
                   onPress={() => {
                     const { ayah } = bookmarkPopup;
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    safeHaptic(Haptics.ImpactFeedbackStyle.Light);
                     toggleBookmark({
                       ayahNumber: ayah.number,
                       surahNumber: ayah.surahNumber,
@@ -1055,9 +1186,14 @@ export default function SurahDetailScreen() {
           paddingHorizontal: 16,
           paddingTop: 0,
         }}
+
+        windowSize={5}
+        removeClippedSubviews={Platform.OS !== 'web'}
+        maxToRenderPerBatch={5}
+        updateCellsBatchingPeriod={50}
         showsVerticalScrollIndicator={false}
         onScrollToIndexFailed={info => {
-          const averageItemHeight = 200; // rough estimate
+          const averageItemHeight = 200;
           const offset = info.index * averageItemHeight;
           flatListRef.current?.scrollToOffset({ offset, animated: false });
           setTimeout(() => {
@@ -1105,7 +1241,6 @@ export default function SurahDetailScreen() {
         }
         ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
         initialNumToRender={10}
-        maxToRenderPerBatch={10}
       />
 
       {isThisSurahPlaying || (currentTrackId?.startsWith(`${surahNumber}_`) && !isPlaying && currentAyahInSurah) ? (
@@ -1148,15 +1283,9 @@ export default function SurahDetailScreen() {
   );
 }
 
-function AyahCard({
-  ayah,
-  theme,
-  isDark,
-  isBookmarked,
-  isCurrentPlaying,
-  isCurrentLoading,
-  onPlayFromHere,
-  onBookmark,
+const AyahCard = React.memo(function AyahCard({
+  ayah, theme, isDark, isBookmarked, isCurrentPlaying,
+  isCurrentLoading, onPlayFromHere, onBookmark,
 }) {
   const hasAudio = !!(ayah.localAudio || ayah.audio);
 
@@ -1204,12 +1333,16 @@ function AyahCard({
         </View>
       </View>
 
-      <Text style={[styles.ayahArabic, { color: theme.arabicText }]}>{ayah.arabicText}</Text>
+      <View style={{ direction: "rtl" }}>
+        <Text style={[styles.ayahArabic, { color: theme.arabicText }]}>{ayah.arabicText}</Text>
+      </View>
 
-      <Text style={[styles.ayahTranslation, { color: theme.translationText }]}>{ayah.translationText}</Text>
+      <View style={{ direction: "ltr" }}>
+        <Text style={[styles.ayahTranslation, { color: theme.translationText }]}>{ayah.translationText}</Text>
+      </View>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -1323,14 +1456,17 @@ const styles = StyleSheet.create({
   ayahArabic: {
     fontSize: 24,
     lineHeight: 46,
-    textAlign: "right",
+    textAlign: "justify",
     fontFamily: "Amiri_400Regular",
     marginBottom: 12,
+    writingDirection: "rtl",
+
   },
   ayahTranslation: {
     fontSize: 14,
     lineHeight: 22,
     fontFamily: "Inter_400Regular",
+    textAlign: "justify",
   },
   errorText: {
     fontSize: 15,
@@ -1417,6 +1553,8 @@ const styles = StyleSheet.create({
     lineHeight: 65,
     fontFamily: "Amiri_400Regular",
     color: "#0c0c0c",
+    writingDirection: "rtl",
+
     paddingHorizontal: 0,
   },
   mushafTextActive: {
@@ -1432,7 +1570,6 @@ const styles = StyleSheet.create({
     paddingVertical: 30,
     alignItems: "center",
   },
-  // 4. Add these styles to your StyleSheet.create({...}):
   mushafTextBookmarked: {
     color: "#8C7563",
     backgroundColor: "rgba(140,117,99,0.12)",
@@ -1481,7 +1618,6 @@ const styles = StyleSheet.create({
     color: "#40433f",
   },
 
-  // STEP 5 — Update styles. Remove bookmarkPopup* styles, add these:
   mushafAyahText: {
     writingDirection: "rtl",
     fontSize: 24,
@@ -1493,8 +1629,6 @@ const styles = StyleSheet.create({
   mushafTextSelected: {
     backgroundColor: "rgba(140,117,99,0.07)",
   },
-
-
   mushafAyahRow: {
     position: "relative",
     marginBottom: 2,
