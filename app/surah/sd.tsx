@@ -6,17 +6,16 @@ import {
   FlatList,
   Pressable,
   ActivityIndicator,
-  useColorScheme,
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import * as Haptics from "expo-haptics";
-import Colors from "@/constants/colors";
 import { fetchSurahArabic, fetchSurahTranslation, fetchSurahs, AyahEdition, getArabicNumber, getLocalAudioUri } from "@/lib/quran-api";
 import { useQuran, AudioTrack } from "@/lib/quran-context";
 import { useDownload } from "@/lib/download-context";
+import { useTheme } from "@/lib/theme-context";
 
 //surah detail screen
 
@@ -24,11 +23,7 @@ export default function SurahDetailScreen() {
 
   //get the surah id 
   const { id } = useLocalSearchParams();
-  const colorScheme = useColorScheme();
-
-  //dark
-  const isDark = colorScheme === "dark";
-  const theme = isDark ? Colors.dark : Colors.light;
+  const { isDark, theme } = useTheme();
   const insets = useSafeAreaInsets();
   //check if ayah is bookmarked , playing, states
   const {

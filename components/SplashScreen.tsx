@@ -1,3 +1,4 @@
+import { useTheme } from "@/lib/theme-context";
 import React, { useEffect } from "react"
 import { StyleSheet, ImageBackground, Image } from "react-native"
 import Animated, {
@@ -9,7 +10,8 @@ import Animated, {
 } from "react-native-reanimated"
 
 export default function SplashScreen({ onFinish }) {
-
+  
+  const { isDark, theme, toggleTheme } = useTheme()
   const containerOpacity = useSharedValue(1)
 
   useEffect(() => {
@@ -29,13 +31,22 @@ export default function SplashScreen({ onFinish }) {
     <Animated.View style={[styles.wrapper, containerStyle]}>
 
       {/* GIF background */}
-      <ImageBackground
-        source={require("../assets/images/splash-screen.gif")}
-        style={styles.container}
-        
-      >
-      
-      </ImageBackground>
+        {/* Background image container */}
+    <ImageBackground
+      source={require("../assets/images/splash-screen.svg")}
+      style={[
+        styles.container,
+        {
+          // Apply background color based on theme
+          backgroundColor: isDark ? "#1a1a1a" : "#fdf2e2" // dark : cream
+        }
+      ]}
+    >
+      {/* Your content goes here */}
+
+    </ImageBackground>
+
+
 
     </Animated.View>
   )

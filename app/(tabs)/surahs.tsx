@@ -6,21 +6,18 @@ import {
   FlatList,
   Pressable,
   ActivityIndicator,
-  useColorScheme,
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
-import Colors from "@/constants/colors";
 import { fetchSurahs, Surah, getArabicNumber } from "@/lib/quran-api";
 import { useDownload } from "@/lib/download-context";
+import { useTheme } from "@/lib/theme-context";
 
 export default function SurahsScreen() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
-  const theme = isDark ? Colors.dark : Colors.light;
+  const { isDark, theme } = useTheme();
   const insets = useSafeAreaInsets();
   const { surahStatus, isDownloadingAll, downloadProgress, downloadAllContent, cancelDownload, totalDownloaded } =
     useDownload();
@@ -79,13 +76,13 @@ export default function SurahsScreen() {
           styles.surahItem,
           {
             backgroundColor: pressed
-              ? "rgba(228,210,201,0.4)"
+              ? (isDark ? "rgba(58,58,58,0.4)" : "rgba(228,210,201,0.4)")
               : "transparent",
           },
         ]}
       >
-        <View style={[styles.surahNumber, { backgroundColor: "#e4d2c9" }]}>
-          <Text style={[styles.surahNumberText, { color: "#40433f" }]}>{item.number}</Text>
+        <View style={[styles.surahNumber, { backgroundColor: theme.border }]}>
+          <Text style={[styles.surahNumberText, { color: theme.text }]}>{item.number}</Text>
         </View>
         <View style={styles.surahInfo}>
           <Text style={[styles.surahName, { color: theme.text, fontFamily: "Inter_600SemiBold" }]}>
@@ -98,9 +95,9 @@ export default function SurahsScreen() {
         <View style={styles.surahRight}>
           <Text style={[styles.arabicName, { color: theme.text }]}>{item.name}</Text>
           {status === "downloaded" ? (
-            <Ionicons name="checkmark-circle" size={14} color="#706c67" style={{ marginTop: 4 }} />
+            <Ionicons name="checkmark-circle" size={14} color={theme.textSecondary} style={{ marginTop: 4 }} />
           ) : status === "downloading" ? (
-            <ActivityIndicator size="small" color="#706c67" style={{ marginTop: 4 }} />
+            <ActivityIndicator size="small" color={theme.textSecondary} style={{ marginTop: 4 }} />
           ) : null}
         </View>
       </Pressable>
@@ -110,7 +107,7 @@ export default function SurahsScreen() {
   if (loading) {
     return (
       <View style={[styles.centered, { backgroundColor: theme.background, paddingTop: insets.top + webTopInset }]}>
-        <ActivityIndicator size="large" color="#706c67" />
+        <ActivityIndicator size="large" color={theme.textSecondary} />
       </View>
     );
   }
@@ -126,7 +123,7 @@ export default function SurahsScreen() {
           onPress={loadSurahs}
           style={({ pressed }) => [
             styles.retryButton,
-            { backgroundColor: "#e4d2c9", opacity: pressed ? 0.8 : 1 },
+            { backgroundColor: theme.border, opacity: pressed ? 0.8 : 1 },
           ]}
         >
           <Text style={styles.retryText}>Try Again</Text>
@@ -174,7 +171,7 @@ export default function SurahsScreen() {
                       <View
                         style={[
                           styles.progressBarFill,
-                          { backgroundColor: "#40433f", width: `${downloadProgress.overallPercent}%` },
+                          { backgroundColor: theme.accent, width: `${downloadProgress.overallPercent}%` },
                         ]}
                       />
                     </View>
@@ -191,10 +188,10 @@ export default function SurahsScreen() {
                     onPress={handleDownloadAll}
                     style={({ pressed }) => [
                       styles.downloadButton,
-                      { backgroundColor: "#e4d2c9", opacity: pressed ? 0.85 : 1 },
+                      { backgroundColor: theme.border, opacity: pressed ? 0.85 : 1 },
                     ]}
                   >
-                    <Ionicons name="cloud-download-outline" size={20} color="#8C7563" />
+                    <Ionicons name="cloud-download-outline" size={20} color={theme.tint} />
                     <Text style={styles.downloadButtonText}>
                       Download All for Offline
                       {totalDownloaded > 0 ? ` (${totalDownloaded}/114)` : ""}
@@ -206,7 +203,7 @@ export default function SurahsScreen() {
           </View>
         }
         ItemSeparatorComponent={() => (
-          <View style={[styles.separator, { backgroundColor: "#e4d2c9" }]} />
+          <View style={[styles.separator, { backgroundColor: theme.border }]} />
         )}
       />
     </View>

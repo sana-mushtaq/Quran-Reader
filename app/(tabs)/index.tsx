@@ -6,22 +6,19 @@ import {
   ScrollView,
   Pressable,
   ActivityIndicator,
-  useColorScheme,
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
-import Colors from "@/constants/colors";
 import { fetchRandomAyah, AyahEdition, getArabicNumber } from "@/lib/quran-api";
 import { useQuran } from "@/lib/quran-context";
+import { useTheme } from "@/lib/theme-context";
 import { router } from "expo-router";
 
 export default function HomeScreen() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
-  const theme = isDark ? Colors.dark : Colors.light;
+  const { isDark, theme } = useTheme();
   const insets = useSafeAreaInsets();
   const { isBookmarked, toggleBookmark, playSingle, pauseAudio, resumeAudio, isPlaying, currentTrackId, isLoading } = useQuran();
 
@@ -103,7 +100,7 @@ export default function HomeScreen() {
     >
       <View style={styles.header}>
 
-        <Text style={[styles.dateText, { color: "#706c67" }]}>
+        <Text style={[styles.dateText, { color: theme.textSecondary }]}>
           {dateStr} {' '} {dateStrAr}
         </Text>
         <Text style={[styles.greeting, { color: theme.text, fontFamily: "Inter_600SemiBold" }]}>
@@ -116,11 +113,11 @@ export default function HomeScreen() {
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#706c67" />
+          <ActivityIndicator size="large" color={theme.textSecondary} />
         </View>
       ) : error ? (
         <View style={styles.errorContainer}>
-          <Ionicons name="cloud-offline-outline" size={48} color="#706c67" />
+          <Ionicons name="cloud-offline-outline" size={48} color={theme.textSecondary} />
           <Text style={[styles.errorText, { color: theme.textSecondary }]}>
             Could not load the daily verse
           </Text>
@@ -128,7 +125,7 @@ export default function HomeScreen() {
             onPress={loadDailyVerse}
             style={({ pressed }) => [
               styles.retryButton,
-              { backgroundColor: "#40433f", opacity: pressed ? 0.8 : 1 },
+              { backgroundColor: theme.accent, opacity: pressed ? 0.8 : 1 },
             ]}
           >
             <Text style={styles.retryText}>Try Again</Text>
@@ -136,10 +133,10 @@ export default function HomeScreen() {
         </View>
       ) : dailyArabic && dailyTranslation ? (
         <View>
-          <View style={styles.dailyCard}>
+          <View style={[styles.dailyCard, { backgroundColor: theme.border }]}>
             <View style={styles.cardHeader}>
-              <View style={styles.surahBadge}>
-                <Text style={styles.surahBadgeText}>
+              <View style={[styles.surahBadge, { backgroundColor: theme.background }]}>
+                <Text style={[styles.surahBadgeText, { color: theme.text }]}>
                   {dailyArabic.surah?.englishName} {getArabicNumber(dailyArabic.numberInSurah)}
                 </Text>
               </View>
@@ -147,12 +144,12 @@ export default function HomeScreen() {
                 {dailyArabic.audio ? (
                   <Pressable onPress={handlePlayAudio} hitSlop={8}>
                     {isLoading && currentTrackId === dailyTrackId ? (
-                      <ActivityIndicator size="small" color="#4b4a49" />
+                      <ActivityIndicator size="small" color={theme.accent} />
                     ) : (
                       <Ionicons
                         name={isDailyPlaying ? "pause" : "play"}
                         size={22}
-                        color="#4b4a49"
+                        color={theme.accent}
                       />
                     )}
                   </Pressable>
@@ -161,19 +158,19 @@ export default function HomeScreen() {
                   <Ionicons
                     name={isBookmarked(dailyArabic.number) ? "bookmark" : "bookmark-outline"}
                     size={20}
-                    color="#4b4a49"
+                    color={theme.accent}
                   />
                 </Pressable>
               </View>
             </View>
 
-            <Text style={styles.arabicDaily}>{dailyArabic.text}</Text>
+            <Text style={[styles.arabicDaily, { color: theme.arabicText }]}>{dailyArabic.text}</Text>
 
             <View style={styles.divider} />
 
             <View style={{ direction: "ltr" }}>
-              <Text style={styles.translationDaily}>{dailyTranslation.text}</Text>
-              <Text style={styles.surahRef}>
+              <Text style={[styles.translationDaily, { color: theme.translationText }]}>{dailyTranslation.text}</Text>
+              <Text style={[styles.surahRef, { color: theme.textSecondary }]}>
                 Surah {dailyArabic.surah?.englishName} - Ayah{" "}No.{" "}
                 {dailyArabic.numberInSurah}
               </Text>
@@ -186,7 +183,7 @@ export default function HomeScreen() {
             <Text style={[styles.infoTitle, { color: theme.text, fontFamily: "Inter_600SemiBold" }]}>
               About this Surah
             </Text>
-            <View style={[styles.infoCard, { backgroundColor: theme.card, borderColor: "#e4d2c9" }]}>
+            <View style={[styles.infoCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <InfoRow
                 icon="book-outline"
                 label="Surah"
@@ -216,11 +213,11 @@ export default function HomeScreen() {
                 }}
                 style={({ pressed }) => [
                   styles.goToSurah,
-                  { borderColor: "#e4d2c9", opacity: pressed ? 0.7 : 1 },
+                  { borderColor: theme.border, opacity: pressed ? 0.7 : 1 },
                 ]}
               >
-                <Text style={[styles.goToSurahText, { color: "#40433f" }]}>Go to Surah</Text>
-                <Ionicons name="chevron-forward" size={14} color="#40433f" />
+                <Text style={[styles.goToSurahText, { color: theme.text }]}>Go to Surah</Text>
+                <Ionicons name="chevron-forward" size={14} color={theme.text} />
               </Pressable>
             </View>
           </View>

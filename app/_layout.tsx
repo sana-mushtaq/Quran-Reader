@@ -10,6 +10,7 @@ import { ScheherazadeNew_700Bold } from "@expo-google-fonts/scheherazade-new";
 import { queryClient } from "@/lib/query-client";
 import { QuranProvider } from "@/lib/quran-context";
 import { DownloadProvider } from "@/lib/download-context";
+import { ThemeProvider } from "@/lib/theme-context";
 import SplashScreen from "@/components/SplashScreen";
 
 ExpoSplashScreen.preventAutoHideAsync();
@@ -43,19 +44,21 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <QuranProvider>
-        <DownloadProvider>
-          <GestureHandlerRootView style={{ flex: 1 }}>
-            <KeyboardProvider>
-              <RootLayoutNav />
-              {showSplash ? (
-                <SplashScreen onFinish={() => setShowSplash(false)} />
-              ) : null}
-            </KeyboardProvider>
-          </GestureHandlerRootView>
-        </DownloadProvider>
-      </QuranProvider>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <QuranProvider>
+          <DownloadProvider>
+            <GestureHandlerRootView style={{ flex: 1 }}>
+              <KeyboardProvider>
+                <RootLayoutNav />
+                {showSplash ? (
+                  <SplashScreen onFinish={() => setShowSplash(false)} />
+                ) : null}
+              </KeyboardProvider>
+            </GestureHandlerRootView>
+          </DownloadProvider>
+        </QuranProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }

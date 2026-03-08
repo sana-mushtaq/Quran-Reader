@@ -5,7 +5,6 @@ import {
   View,
   FlatList,
   Pressable,
-  useColorScheme,
   Platform,
   ActivityIndicator,
 } from "react-native";
@@ -13,14 +12,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
-import Colors from "@/constants/colors";
 import { useQuran } from "@/lib/quran-context";
+import { useTheme } from "@/lib/theme-context";
 import { getArabicNumber } from "@/lib/quran-api";
 
 export default function BookmarksScreen() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
-  const theme = isDark ? Colors.dark : Colors.light;
+  const { isDark, theme } = useTheme();
   const insets = useSafeAreaInsets();
   const { bookmarks, toggleBookmark } = useQuran();
 
@@ -33,7 +30,7 @@ export default function BookmarksScreen() {
         <Text style={[styles.emptyTitle, { color: theme.text, fontFamily: "Inter_600SemiBold" }]}>
           No Bookmarks Yet
         </Text>
-        <Text style={[styles.emptyText, { color: "#8C7563" }]}>
+        <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
           Save your favorite ayahs to find them here
         </Text>
       </View>
@@ -41,7 +38,7 @@ export default function BookmarksScreen() {
   }
 
   const renderBookmark = ({ item }) => (
-    <View style={styles.bookmarkCard}>
+    <View style={[styles.bookmarkCard, { backgroundColor: theme.border }]}>
       <View style={styles.bookmarkHeader}>
         <View style={styles.surahBadge}>
           <Text style={styles.surahBadgeText}>
@@ -55,17 +52,17 @@ export default function BookmarksScreen() {
           }}
           hitSlop={8}
         >
-          <Ionicons name="bookmark" size={20} color="#4b4a49" />
+          <Ionicons name="bookmark" size={20} color={theme.accent} />
         </Pressable>
       </View>
 
 <View style={{direction: "rtl"}}>
-        <Text style={styles.bookmarkArabic}>{item.arabicText}</Text>
+        <Text style={[styles.bookmarkArabic, { color: theme.arabicText }]}>{item.arabicText}</Text>
 
 </View>
       <View style={styles.divider} />
-      <Text style={styles.translationDaily}>{item.translationText}</Text>
-      <Text style={styles.surahRef}>
+      <Text style={[styles.translationDaily, { color: theme.translationText }]}>{item.translationText}</Text>
+      <Text style={[styles.surahRef, { color: theme.textSecondary }]}>
         Surah {item.surahEnglishName} - Ayah{" "}No.{" "}
         {item.numberInSurah}
       </Text>
@@ -79,11 +76,11 @@ export default function BookmarksScreen() {
         }}
         style={({ pressed }) => [
           styles.goToSurah,
-          {  borderColor: "#8C7563", opacity: pressed ? 0.7 : 1 },
+          { borderColor: theme.tint, opacity: pressed ? 0.7 : 1 },
         ]}
       >
-        <Text style={styles.goToSurahText}>Go to Surah</Text>
-        <Ionicons name="chevron-forward" size={14} color="#e4d2c9" />
+        <Text style={[styles.goToSurahText, { color: theme.text }]}>Go to Surah</Text>
+        <Ionicons name="chevron-forward" size={14} color={theme.text} />
       </Pressable>
     </View>
   );
@@ -99,7 +96,7 @@ export default function BookmarksScreen() {
         ListHeaderComponent={
           <View style={styles.listHeader}>
             <Text style={[styles.title, { color: theme.text, fontFamily: "Inter_600SemiBold" }]}>Bookmarks</Text>
-            <Text style={[styles.subtitle, { color: "#706c67" }]}>
+            <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
               {bookmarks.length} saved {bookmarks.length === 1 ? "ayah" : "ayahs"}
             </Text>
           </View>
@@ -147,7 +144,6 @@ const styles = StyleSheet.create({
   bookmarkCard: {
     borderRadius: 16,
     padding: 18,
-    backgroundColor: "#e4d2c9",
   },
   bookmarkHeader: {
     flexDirection: "row",

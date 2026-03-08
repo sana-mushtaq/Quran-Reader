@@ -1,14 +1,14 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
-import { StyleSheet, Text, View, FlatList, Pressable, ActivityIndicator, useColorScheme, Platform, useWindowDimensions, ScrollView, PanResponder, InteractionManager } from "react-native";
+import { StyleSheet, Text, View, FlatList, Pressable, ActivityIndicator, Platform, useWindowDimensions, ScrollView, PanResponder, InteractionManager } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import Svg, { Defs, RadialGradient, Stop, Rect, Path, G, Line, Circle } from "react-native-svg";
-import Colors from "@/constants/colors";
 import { fetchSurahArabic, fetchSurahTranslation, fetchSurahs, AyahEdition, getArabicNumber, getLocalAudioUri } from "@/lib/quran-api";
 import { useQuran, AudioTrack } from "@/lib/quran-context";
 import { useDownload } from "@/lib/download-context";
+import { useTheme } from "@/lib/theme-context";
 import AsyncStorage from "@react-native-async-storage/async-storage"
 const VIEW_MODE_KEY = "surah_view_mode"
 const DEFAULT_VIEW_MODE = "original"
@@ -17,16 +17,16 @@ function safeHaptic(style = Haptics.ImpactFeedbackStyle.Medium) {
   if (Platform.OS === "web") return;
   try {
     Haptics.impactAsync(style);
-  } catch (_) {}
+  } catch (_) { }
 }
 
-function RadialGradientBg({ width, height }: { width: number; height: number }) {
+function RadialGradientBg({ width, height, bgColor }: { width: number; height: number; bgColor?: string }) {
   return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: "#fef9f3" }]} pointerEvents="none" />
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: bgColor || "#fef9f3" }]} pointerEvents="none" />
   );
 }
 
-const SurahBanner = React.memo(function SurahBanner({ name, width }) {
+const SurahBanner = React.memo(function SurahBanner({ name, width, textColor }) {
   const w = width - 32;
   const h = 56;
   const g = "#8C7563";
@@ -197,7 +197,7 @@ const SurahBanner = React.memo(function SurahBanner({ name, width }) {
           <Circle cx={cx} cy={h - p - 7.5} r={1} fill={g} opacity={0.5} />
         </Svg>
         <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, justifyContent: "center", alignItems: "center" }}>
-          <Text style={{ fontSize: 21, fontFamily: "ScheherazadeNew_700Bold", color: "#030303", textAlign: "center", lineHeight: 34, letterSpacing: 1 }}>
+          <Text style={{ fontSize: 21, fontFamily: "ScheherazadeNew_700Bold", color: textColor || "#030303", textAlign: "center", lineHeight: 34, letterSpacing: 1 }}>
             {name}
           </Text>
         </View>
@@ -211,11 +211,13 @@ const MushafAyahSpan = React.memo(function MushafAyahSpan({
   isActive,
   isBookmarked,
   isSelected,
+  activeStyle,
 }) {
   return (
     <Text
+      dataSet={{ ayahNumber: String(ayah.number) }}
       style={[
-        isActive && styles.mushafTextActive,
+        isActive && (activeStyle || styles.mushafTextActive),
         isBookmarked && styles.mushafTextBookmarked,
         isSelected && styles.mushafTextSelected,
       ]}
@@ -230,15 +232,17 @@ const MushafAyahSpan = React.memo(function MushafAyahSpan({
   return (
     prev.isActive === next.isActive &&
     prev.isBookmarked === next.isBookmarked &&
-    prev.isSelected === next.isSelected
+    prev.isSelected === next.isSelected &&
+    prev.activeStyle === next.activeStyle
   );
 });
 
 const MushafAyahsTextBlock = React.memo(function MushafAyahsTextBlock({
   ayahs, surahNumber, currentTrackId, isPlaying, bookmarkedSet, selectedAyahNumber,
+  textColor, activeStyle,
 }) {
   return (
-    <Text style={styles.mushafArabicText}>
+    <Text style={[styles.mushafArabicText, textColor && { color: textColor }]}>
       {ayahs.map((ayah) => {
         const trackId = `${surahNumber}_${ayah.numberInSurah}`;
         return (
@@ -248,6 +252,7 @@ const MushafAyahsTextBlock = React.memo(function MushafAyahsTextBlock({
             isActive={currentTrackId === trackId && isPlaying}
             isBookmarked={bookmarkedSet.has(ayah.number)}
             isSelected={selectedAyahNumber === ayah.number}
+            activeStyle={activeStyle}
           />
         );
       })}
@@ -258,6 +263,8 @@ const MushafAyahsTextBlock = React.memo(function MushafAyahsTextBlock({
   if (prev.isPlaying !== next.isPlaying) return false;
   if (prev.bookmarkedSet !== next.bookmarkedSet) return false;
   if (prev.selectedAyahNumber !== next.selectedAyahNumber) return false;
+  if (prev.textColor !== next.textColor) return false;
+  if (prev.activeStyle !== next.activeStyle) return false;
   const prevHasTrack = prev.currentTrackId?.startsWith(`${prev.surahNumber}_`);
   const nextHasTrack = next.currentTrackId?.startsWith(`${next.surahNumber}_`);
   if (prevHasTrack || nextHasTrack) {
@@ -269,53 +276,67 @@ const MushafAyahsTextBlock = React.memo(function MushafAyahsTextBlock({
 const MushafSurahBlock = React.memo(function MushafSurahBlock({
   surahData, sIdx, screenWidth, currentTrackId, isPlaying,
   bookmarkedSet, selectedBookAyahNumber, selectedBookAyahX, selectedBookAyahY,
-  selectedBookAyahSurah, onBookmarkFlag, onLongPress, onDismissSelection,
+  selectedBookAyahSurah, onBookmarkFlag, onPlayAyah, onStopAyah, onLongPress, onDismissSelection,
+  mushafColors,
 }) {
   const isSelectedSurah = selectedBookAyahSurah === surahData.surahNumber;
-  const textBlockRef = useRef(null);
+  const textContainerRef = useRef(null);
+
+  const findAyahFromTarget = useCallback((target) => {
+    let el = target;
+    while (el) {
+      const ayahNum = el?.dataset?.ayahNumber;
+      if (ayahNum) {
+        const num = parseInt(ayahNum, 10);
+        return surahData.ayahs.find((a) => a.number === num) || null;
+      }
+      el = el.parentElement;
+    }
+    return null;
+  }, [surahData.ayahs]);
 
   const handleLongPress = useCallback((e) => {
     if (!onLongPress) return;
     try {
       const locX = e?.nativeEvent?.locationX ?? 0;
       const locY = e?.nativeEvent?.locationY ?? 0;
-      const lineHeight = 65;
-      const estimatedLine = Math.floor(locY / lineHeight);
 
-      let charsSoFar = 0;
-      const textWidth = screenWidth - 40;
-      const charsPerLine = Math.max(1, Math.floor(textWidth / 6.1));
-      let foundAyah = surahData.ayahs[0];
-
-      for (let i = 0; i < surahData.ayahs.length; i++) {
-        const ayahText = `${surahData.ayahs[i].arabicText} ﴿${getArabicNumber(surahData.ayahs[i].numberInSurah)}﴾ `;
-        charsSoFar += ayahText.length;
-        const linesUsed = Math.ceil(charsSoFar / charsPerLine);
-        if (linesUsed > estimatedLine) {
-          foundAyah = surahData.ayahs[i];
-          break;
+      let foundAyah = null;
+      if (Platform.OS === "web") {
+        if (e?.nativeEvent?.target) {
+          foundAyah = findAyahFromTarget(e.nativeEvent.target);
         }
-        if (i === surahData.ayahs.length - 1) {
-          foundAyah = surahData.ayahs[i];
+        if (!foundAyah) {
+          const clientX = e?.nativeEvent?.clientX ?? e?.nativeEvent?.pageX ?? 0;
+          const clientY = e?.nativeEvent?.clientY ?? e?.nativeEvent?.pageY ?? 0;
+          if (clientX && clientY && typeof document !== "undefined") {
+            const el = document.elementFromPoint(clientX, clientY);
+            if (el) {
+              foundAyah = findAyahFromTarget(el);
+            }
+          }
         }
       }
 
+      if (!foundAyah) {
+        foundAyah = surahData.ayahs[0];
+      }
+
       onLongPress(foundAyah, locX, locY, surahData.surahNumber);
-    } catch (_) {}
-  }, [onLongPress, surahData, screenWidth]);
+    } catch (_) { }
+  }, [onLongPress, surahData, findAyahFromTarget]);
 
   return (
     <View>
       {sIdx > 0 && <View style={styles.surahDivider} />}
-      <SurahBanner name={surahData.meta.name} width={screenWidth} />
+      <SurahBanner name={surahData.meta.name} width={screenWidth} textColor={mushafColors?.text} />
       {surahData.surahNumber !== 9 && (
-        <Text style={styles.mushafBismillah}>
-          بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
+        <Text style={[styles.mushafBismillah, mushafColors && { color: mushafColors.text }]}>
+          بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ {surahData.surahNumber === 1 ? "﴿١﴾" : ""}
         </Text>
       )}
-      <View style={{ position: "relative", direction: "rtl" }}>
+      <View ref={textContainerRef} style={{ position: "relative", direction: "rtl" }}>
         <Pressable
-          ref={textBlockRef}
           onLongPress={handleLongPress}
           onPress={onDismissSelection}
           delayLongPress={400}
@@ -328,21 +349,41 @@ const MushafSurahBlock = React.memo(function MushafSurahBlock({
             isPlaying={isPlaying}
             bookmarkedSet={bookmarkedSet}
             selectedAyahNumber={isSelectedSurah ? selectedBookAyahNumber : null}
+            textColor={mushafColors?.text}
+            activeStyle={mushafColors?.activeStyle}
           />
         </Pressable>
-        {isSelectedSurah && selectedBookAyahNumber != null && (
-          <Pressable
-            style={[styles.mushafBookmarkFlag, { left: selectedBookAyahX - 10, top: selectedBookAyahY - 40 }]}
-            onPress={onBookmarkFlag}
-            hitSlop={12}
-          >
-            <Ionicons
-              name={bookmarkedSet.has(selectedBookAyahNumber) ? "bookmark" : "bookmark-outline"}
-              size={18}
-              color="#8C7563"
-            />
-          </Pressable>
-        )}
+        {isSelectedSurah && selectedBookAyahNumber != null && (() => {
+          const selAyah = surahData.ayahs.find((a) => a.number === selectedBookAyahNumber);
+          const selTrackId = selAyah ? `${surahData.surahNumber}_${selAyah.numberInSurah}` : null;
+          const isAyahPlaying = isPlaying && currentTrackId === selTrackId;
+          return (
+            <View style={[styles.mushafActionRow, { left: selectedBookAyahX - 40, top: selectedBookAyahY - 40 }]}>
+              <Pressable
+                style={[styles.mushafActionBtn, mushafColors && { backgroundColor: mushafColors.btnBg, borderColor: mushafColors.btnBorder }]}
+                onPress={onBookmarkFlag}
+                hitSlop={8}
+              >
+                <Ionicons
+                  name={bookmarkedSet.has(selectedBookAyahNumber) ? "bookmark" : "bookmark-outline"}
+                  size={18}
+                  color={mushafColors?.btnIcon || "#8C7563"}
+                />
+              </Pressable>
+              <Pressable
+                style={[styles.mushafActionBtn, mushafColors && { backgroundColor: mushafColors.btnBg, borderColor: mushafColors.btnBorder }]}
+                onPress={isAyahPlaying ? onStopAyah : onPlayAyah}
+                hitSlop={8}
+              >
+                <Ionicons
+                  name={isAyahPlaying ? "stop" : "play"}
+                  size={18}
+                  color={mushafColors?.btnIcon || "#8C7563"}
+                />
+              </Pressable>
+            </View>
+          );
+        })()}
       </View>
     </View>
   );
@@ -353,6 +394,7 @@ const MushafSurahBlock = React.memo(function MushafSurahBlock({
   if (prev.isPlaying !== next.isPlaying) return false;
   if (prev.bookmarkedSet !== next.bookmarkedSet) return false;
   if (prev.onLongPress !== next.onLongPress) return false;
+  if (prev.mushafColors !== next.mushafColors) return false;
 
   const prevHasTrack = prev.currentTrackId?.startsWith(`${prev.surahData.surahNumber}_`);
   const nextHasTrack = next.currentTrackId?.startsWith(`${next.surahData.surahNumber}_`);
@@ -384,9 +426,7 @@ export default function SurahDetailScreen() {
   const bookScrollYRef = useRef(0)
   const mushafLayoutRef = useRef({ x: 0, y: 0 })
 
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
-  const theme = isDark ? Colors.dark : Colors.light;
+  const { isDark, theme } = useTheme();
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const audioDrivenRef = useRef(false);
@@ -463,7 +503,7 @@ export default function SurahDetailScreen() {
         };
       });
 
-      combined[0].arabicText = combined[0].arabicText.replace("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ", "")
+      combined[0].arabicText = combined[0].arabicText.replace("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ", "")
       if (surahNumber === 1) {
         combined.splice(0, 1);
       }
@@ -502,8 +542,9 @@ export default function SurahDetailScreen() {
           localAudio: localUri || undefined,
         };
       });
+      console.log(combined[0].arabicText)
       if (num !== 1) {
-        combined[0].arabicText = combined[0].arabicText.replace("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ", "");
+        combined[0].arabicText = combined[0].arabicText.replace("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ", "");
       }
 
       if (num === 1) {
@@ -831,6 +872,28 @@ export default function SurahDetailScreen() {
     setSelectedBookAyah(null);
   }, [toggleBookmark, surahArabicName, surahEnglishName]);
 
+  const handlePlayAyahFlag = useCallback(async () => {
+    const sel = selectedBookAyahRef.current;
+    if (!sel) return;
+    safeHaptic(Haptics.ImpactFeedbackStyle.Light);
+    const audioUri = sel.ayah.localAudio || sel.ayah.audio;
+    if (audioUri) {
+      const track = {
+        id: `${sel.surahNumber}_${sel.ayah.numberInSurah}`,
+        uri: audioUri,
+        ayahNumberInSurah: sel.ayah.numberInSurah,
+      };
+      await playQueue([track], 0);
+    } else {
+      setSelectedBookAyah(null);
+    }
+  }, [playQueue]);
+
+  const handleStopAyahFlag = useCallback(() => {
+    stopAudio();
+    setSelectedBookAyah(null);
+  }, [stopAudio]);
+
   const bookmarkedSet = useMemo(() => {
     const set = new Set();
     for (const surahData of bookSurahs) {
@@ -871,14 +934,44 @@ export default function SurahDetailScreen() {
       InteractionManager.runAfterInteractions(() => {
         setSelectedBookAyah(newSelection);
       });
-    } catch (_) {}
+    } catch (_) { }
   }, []);
 
   const dismissSelection = useCallback(() => {
-    if (selectedBookAyahRef.current) {
-      setSelectedBookAyah(null);
+    const sel = selectedBookAyahRef.current;
+    if (!sel) return;
+    const selTrackId = `${sel.surahNumber}_${sel.ayah.numberInSurah}`;
+    if (isPlaying && currentTrackId === selTrackId) return;
+    setSelectedBookAyah(null);
+  }, [isPlaying, currentTrackId]);
+
+  const prevIsPlayingRef = useRef(false);
+  const prevTrackForSelRef = useRef<string | null>(null);
+  useEffect(() => {
+    prevIsPlayingRef.current = isPlaying;
+    prevTrackForSelRef.current = currentTrackId;
+  }, [selectedBookAyah]);
+  useEffect(() => {
+    const sel = selectedBookAyahRef.current;
+    if (sel) {
+      const selTrackId = `${sel.surahNumber}_${sel.ayah.numberInSurah}`;
+      const wasPlayingThisAyah = prevIsPlayingRef.current && prevTrackForSelRef.current === selTrackId;
+      const stoppedNow = !isPlaying || currentTrackId !== selTrackId;
+      if (wasPlayingThisAyah && stoppedNow) {
+        setSelectedBookAyah(null);
+      }
+      prevTrackForSelRef.current = currentTrackId;
     }
-  }, []);
+    prevIsPlayingRef.current = isPlaying;
+  }, [isPlaying, currentTrackId]);
+
+  const mushafColors = useMemo(() => ({
+    text: theme.text,
+    btnBg: theme.mushafBtnBg,
+    btnBorder: theme.mushafBtnBorder,
+    btnIcon: theme.mushafBtnIcon,
+    activeStyle: { backgroundColor: theme.mushafActive, color: theme.text },
+  }), [theme]);
 
   const renderBookSurahItem = useCallback(({ item: surahData, index: sIdx }) => {
     return (
@@ -894,11 +987,14 @@ export default function SurahDetailScreen() {
         selectedBookAyahY={selectedBookAyah?.surahNumber === surahData.surahNumber ? selectedBookAyah?.y : 0}
         selectedBookAyahSurah={selectedBookAyah?.surahNumber ?? null}
         onBookmarkFlag={handleBookmarkFlag}
+        onPlayAyah={handlePlayAyahFlag}
+        onStopAyah={handleStopAyahFlag}
         onLongPress={longPressHandler}
         onDismissSelection={dismissSelection}
+        mushafColors={mushafColors}
       />
     );
-  }, [screenWidth, currentTrackId, isPlaying, bookmarkedSet, selectedBookAyah, handleBookmarkFlag, longPressHandler, dismissSelection]);
+  }, [screenWidth, currentTrackId, isPlaying, bookmarkedSet, selectedBookAyah, handleBookmarkFlag, handlePlayAyahFlag, handleStopAyahFlag, longPressHandler, dismissSelection, mushafColors]);
 
   const bookSurahKeyExtractor = useCallback((item) => item.surahNumber.toString(), []);
 
@@ -983,18 +1079,18 @@ export default function SurahDetailScreen() {
         onPress={() => changeViewMode("original")}
         style={[
           styles.toggleBtn,
-          viewMode === "original" && { backgroundColor: "#e4d2c9" },
+          viewMode === "original" && { backgroundColor: theme.border },
         ]}
       >
         <Ionicons
           name="list-outline"
           size={16}
-          color={viewMode === "original" ? "#40433f" : "#706c67"}
+          color={viewMode === "original" ? theme.text : theme.textSecondary}
         />
         <Text
           style={[
             styles.toggleText,
-            { color: viewMode === "original" ? "#40433f" : "#706c67" },
+            { color: viewMode === "original" ? theme.text : theme.textSecondary },
           ]}
         >
           List
@@ -1004,18 +1100,18 @@ export default function SurahDetailScreen() {
         onPress={() => changeViewMode("book")}
         style={[
           styles.toggleBtn,
-          viewMode === "book" && { backgroundColor: "#e4d2c9" },
+          viewMode === "book" && { backgroundColor: theme.border },
         ]}
       >
         <Ionicons
           name="book-outline"
           size={16}
-          color={viewMode === "book" ? "#40433f" : "#706c67"}
+          color={viewMode === "book" ? theme.text : theme.textSecondary}
         />
         <Text
           style={[
             styles.toggleText,
-            { color: viewMode === "book" ? "#40433f" : "#706c67" },
+            { color: viewMode === "book" ? theme.text : theme.textSecondary },
           ]}
         >
           Book
@@ -1026,18 +1122,18 @@ export default function SurahDetailScreen() {
 
   if (viewMode === "book") {
     return (
-      <View style={[styles.container, { backgroundColor: "#fef9f3" }]}>
-        <RadialGradientBg width={screenWidth} height={screenHeight} />
+      <View style={[styles.container, { backgroundColor: theme.mushafBg }]}>
+        <RadialGradientBg width={screenWidth} height={screenHeight} bgColor={theme.mushafBg} />
         <View style={[styles.topBar, { paddingTop: insets.top + 20 }]}>
           <Pressable
             onPress={() => { stopAudio(); router.back(); }}
             hitSlop={12}
             style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]}
           >
-            <Ionicons name="chevron-back" size={24} color="#0c0c0c" />
+            <Ionicons name="chevron-back" size={24} color={theme.text} />
           </Pressable>
           <View style={styles.topBarCenter}>
-            <Text style={[styles.topBarTitle, { color: "#0c0c0c", fontFamily: "Inter_600SemiBold" }]}>
+            <Text style={[styles.topBarTitle, { color: theme.text, fontFamily: "Inter_600SemiBold" }]}>
               {visibleBookSurahName}
             </Text>
           </View>
@@ -1048,19 +1144,19 @@ export default function SurahDetailScreen() {
               style={({ pressed }) => [styles.iconBtn, { opacity: pressed ? 0.6 : 1 }]}
             >
               {isLoading && isVisibleSurahPlaying ? (
-                <ActivityIndicator size="small" color="#404040" />
+                <ActivityIndicator size="small" color={theme.accent} />
               ) : (
                 <Ionicons
                   name={isPlaying && isVisibleSurahPlaying ? "pause" : "play"}
                   size={22}
-                  color="#4b4a49"
+                  color={theme.accent}
                 />
               )}
             </Pressable>
           </View>
         </View>
 
-        <View style={[styles.toggleRow, { borderBottomColor: "rgba(191,187,180,0.4)" }]}>
+        <View style={[styles.toggleRow, { borderBottomColor: theme.border }]}>
           {toggleBar}
         </View>
         <FlatList
@@ -1209,7 +1305,7 @@ export default function SurahDetailScreen() {
             {surahNumber !== 9 ? (
               <View style={styles.bismillah}>
                 <Text style={[styles.bismillahText, { color: theme.arabicText }]}>
-                  بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ
+                  بِسْمِ ٱللَّهِ ٱلرَّحْمَـٰنِ ٱلرَّحِيمِ {surahNumber === 1 ? "﴿١﴾" : ""}
                 </Text>
               </View>
             ) : null}
@@ -1219,8 +1315,8 @@ export default function SurahDetailScreen() {
                 styles.playAllButton,
                 {
                   backgroundColor: isThisSurahPlaying
-                    ? "rgba(228,210,201,0.5)"
-                    : "#e4d2c9",
+                    ? (isDark ? "rgba(58,58,58,0.5)" : "rgba(228,210,201,0.5)")
+                    : theme.border,
                   opacity: pressed ? 0.85 : 1,
                 },
               ]}
@@ -1304,10 +1400,10 @@ const AyahCard = React.memo(function AyahCard({
         <View
           style={[
             styles.verseNumBadge,
-            { backgroundColor: "#e4d2c9" },
+            { backgroundColor: theme.border },
           ]}
         >
-          <Text style={[styles.verseNumText, { color: "#40433f" }]}>{ayah.numberInSurah}</Text>
+          <Text style={[styles.verseNumText, { color: theme.text }]}>{ayah.numberInSurah}</Text>
         </View>
         <View style={styles.ayahActions}>
           {hasAudio ? (
@@ -1649,5 +1745,21 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: "Inter_600SemiBold",
     color: "#8C7563",
+  },
+  mushafActionRow: {
+    position: "absolute",
+    flexDirection: "row",
+    gap: 6,
+    zIndex: 999,
+  },
+  mushafActionBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#fef9f3",
+    borderWidth: 1,
+    borderColor: "rgba(140,117,99,0.3)",
   },
 });
